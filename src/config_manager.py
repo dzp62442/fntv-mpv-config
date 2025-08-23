@@ -1,6 +1,6 @@
 """
 配置管理模块
-负责读取和验证 package.json 配置文件
+负责读取和验证 package_cfg.json 配置文件
 """
 import json
 import os
@@ -16,7 +16,7 @@ class ConfigError(Exception):
 class ConfigManager:
     """配置管理器"""
     
-    def __init__(self, config_path: str = "package.json"):
+    def __init__(self, config_path: str = "package_cfg.json"):
         """
         初始化配置管理器
         
@@ -74,6 +74,16 @@ class ConfigManager:
     def get_custom_config_dir(self) -> Path:
         """获取自定义配置目录"""
         return Path(self.get_config()['config']['custom_config_dir'])
+    
+    def get_github_proxy(self) -> str:
+        """获取GitHub代理地址"""
+        config = self.get_config()['config']
+        return config.get('github_proxy', '')
+    
+    def is_proxy_enabled(self) -> bool:
+        """检查是否启用代理"""
+        config = self.get_config()['config']
+        return config.get('enable_proxy', False)
     
     def get_enabled_dependencies(self) -> Dict[str, Dict[str, Any]]:
         """获取已启用的依赖项"""

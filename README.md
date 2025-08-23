@@ -8,7 +8,8 @@
 - 🔧 **版本控制**: 通过配置文件管理所有组件版本
 - 🔌 **插件热插拔**: 轻松启用/禁用插件
 - 📦 **智能打包**: 自动创建便携式安装包
-- 🛠️ **自定义配置**: 支持自定义配置文件
+- �️ **多格式支持**: 支持7z、zip、rar等多种压缩格式
+- �🛠️ **自定义配置**: 支持自定义配置文件
 - 🚀 **CI/CD支持**: GitHub Actions每日自动构建
 
 ## 项目结构
@@ -31,7 +32,7 @@ fntv-mpv-config/
 │           └── uosc.conf  # UOSC插件配置
 ├── tests/                 # 测试目录
 ├── .github/workflows/     # GitHub Actions工作流
-├── package.json          # 主配置文件
+├── package_cfg.json          # 主配置文件
 ├── requirements.txt      # Python依赖
 ├── run.py               # 运行脚本
 └── README.md           # 文档
@@ -41,6 +42,20 @@ fntv-mpv-config/
 
 ### 1. 环境准备
 
+#### 系统要求
+- Python 3.7+
+- 7-Zip (用于解压某些压缩格式)
+
+#### 安装7-Zip (必需)
+```bash
+# Windows (使用winget包管理器)
+winget install --id 7zip.7zip
+
+# 或者手动下载安装
+# 访问 https://7-zip.org/ 下载并安装
+```
+
+#### 克隆项目并安装依赖
 ```bash
 # 克隆仓库
 git clone https://github.com/your-username/fntv-mpv-config.git
@@ -52,7 +67,7 @@ pip install -r requirements.txt
 
 ### 2. 配置管理
 
-编辑 `package.json` 文件来配置版本和下载源：
+编辑 `package_cfg.json` 文件来配置版本和下载源：
 
 ```json
 {
@@ -98,7 +113,7 @@ python run.py --skip-install
 
 ## 配置文件详解
 
-### package.json 主配置文件
+### package_cfg.json 主配置文件
 
 ```json
 {
@@ -216,17 +231,29 @@ python tests/test_all.py
 
 ## 常见问题
 
+### Q: 解压失败，提示"无法找到 7-Zip 命令行工具"？
+A: 这是因为系统缺少7-Zip工具。请按照以下步骤解决：
+```bash
+# 使用winget安装（推荐）
+winget install --id 7zip.7zip
+
+# 或者手动下载安装
+# 1. 访问 https://7-zip.org/
+# 2. 下载并安装7-Zip
+# 3. 确保7z.exe在系统PATH中或安装在默认位置
+```
+
 ### Q: 下载失败怎么办？
 A: 检查网络连接，确认GitHub访问正常。可以使用`--log-level DEBUG`查看详细错误信息。
 
 ### Q: 如何添加新的插件？
-A: 在`package.json`的`dependencies`中添加新的插件配置，包括下载地址、版本号和安装规则。
+A: 在`package_cfg.json`的`dependencies`中添加新的插件配置，包括下载地址、版本号和安装规则。
 
 ### Q: 自定义配置不生效？
 A: 确认配置文件放在正确的`custom_config`目录结构中，并且文件名和路径正确。
 
 ### Q: GitHub Actions构建失败？
-A: 检查`package.json`中的版本号是否存在，网络访问是否正常，依赖项是否正确安装。
+A: 检查`package_cfg.json`中的版本号是否存在，网络访问是否正常，依赖项是否正确安装。
 
 ## 许可证
 

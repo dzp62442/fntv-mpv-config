@@ -110,8 +110,47 @@ class ExtractManager:
     
     def _extract_7z(self, archive_path: Path, extract_to: Path):
         """解压7Z文件"""
-        with py7zr.SevenZipFile(archive_path, mode='r') as z:
-            z.extractall(extract_to)
+        try:
+            with py7zr.SevenZipFile(archive_path, mode='r') as z:
+                z.extractall(extract_to)
+        except Exception as e:
+            error_msg = str(e)
+            if "BCJ2 filter is not supported" in error_msg:
+                self.logger.warning(f"py7zr 不支持该压缩格式，尝试使用 7-Zip 命令行工具")
+                self._extract_with_7zip_cli(archive_path, extract_to)
+            else:
+                raise ExtractError(f"解压失败: {e}")
+    
+    def _extract_with_7zip_cli(self, archive_path: Path, extract_to: Path):
+        """使用 7-Zip 命令行工具解压"""
+        import subprocess
+        import shutil
+        
+        # 查找 7z.exe
+        seven_zip_paths = [
+            r"C:\Program Files\7-Zip\7z.exe",
+            r"C:\Program Files (x86)\7-Zip\7z.exe",
+            "7z.exe"  # 在 PATH 中
+        ]
+        
+        seven_zip_exe = None
+        for path in seven_zip_paths:
+            if shutil.which(path) or (Path(path).exists() if Path(path).is_absolute() else False):
+                seven_zip_exe = path
+                break
+        
+        if not seven_zip_exe:
+            raise ExtractError("无法找到 7-Zip 命令行工具，请安装 7-Zip 或使用其他压缩格式")
+        
+        try:
+            # 执行解压命令
+            cmd = [seven_zip_exe, "x", str(archive_path), f"-o{extract_to}", "-y"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            self.logger.info(f"使用 7-Zip 成功解压到: {extract_to}")
+        except subprocess.CalledProcessError as e:
+            raise ExtractError(f"7-Zip 解压失败: {e.stderr}")
+        except Exception as e:
+            raise ExtractError(f"执行 7-Zip 失败: {e}")
     
     def _extract_rar(self, archive_path: Path, extract_to: Path):
         """解压RAR文件"""

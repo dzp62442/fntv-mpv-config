@@ -95,7 +95,7 @@ custom_config/
 ### 配置错误
 ```bash
 # 验证配置文件
-python validate_config.py package.json
+python validate_config.py package_cfg.json
 ```
 
 ### 清理重建

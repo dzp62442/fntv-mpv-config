@@ -17,7 +17,7 @@ from .log_manager import LogManager
 class MPVConfigManager:
     """MPV配置管理器主类"""
     
-    def __init__(self, config_path: str = "package.json", log_level: str = "INFO"):
+    def __init__(self, config_path: str = "package_cfg.json", log_level: str = "INFO"):
         """
         初始化MPV配置管理器
         
@@ -113,7 +113,11 @@ class MPVConfigManager:
         output_dir = self.config_manager.get_output_dir()
         custom_config_dir = self.config_manager.get_custom_config_dir()
         
-        self.download_manager = DownloadManager(temp_dir)
+        # 获取代理配置
+        proxy_url = self.config_manager.get_github_proxy()
+        enable_proxy = self.config_manager.is_proxy_enabled()
+        
+        self.download_manager = DownloadManager(temp_dir, proxy_url, enable_proxy)
         self.extract_manager = ExtractManager(temp_dir)
         self.install_manager = InstallManager(output_dir, custom_config_dir)
     
@@ -165,7 +169,7 @@ class MPVConfigManager:
             self.logger.info("可用的依赖项:")
             for name, config in dependencies.items():
                 status = "启用" if config.get('enabled', True) else "禁用"
-                self.logger.info(f"  - {name}: {config['name']} v{config['version']} ({status})")
+                self.logger.info(f"  - {name}: {config['name']} {config['version']} ({status})")
                 
         except Exception as e:
             self.logger.error(f"列出依赖项失败: {e}")
@@ -217,8 +221,8 @@ def create_cli_parser() -> argparse.ArgumentParser:
     # 主要操作参数
     parser.add_argument(
         '--config', '-c',
-        default='package.json',
-        help='配置文件路径 (默认: package.json)'
+        default='package_cfg.json',
+        help='配置文件路径 (默认: package_cfg.json)'
     )
     
     parser.add_argument(

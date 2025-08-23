@@ -16,7 +16,7 @@ sys.path.insert(0, str(src_dir))
 from src.config_manager import ConfigManager, ConfigError
 
 
-def validate_config(config_path="package.json"):
+def validate_config(config_path="package_cfg.json"):
     """
     验证配置文件
     
@@ -52,7 +52,7 @@ def validate_config(config_path="package.json"):
         
         for name, dep_config in dependencies.items():
             status = "启用" if dep_config.get('enabled', True) else "禁用"
-            print(f"   {name}: {dep_config['name']} v{dep_config['version']} ({status})")
+            print(f"   {name}: {dep_config['name']} {dep_config['version']} ({status})")
             
             # 检查必需字段
             required_fields = ['name', 'url', 'version', 'filename_pattern', 'format']
@@ -119,8 +119,8 @@ def main():
     parser.add_argument(
         'config',
         nargs='?',
-        default='package.json',
-        help='配置文件路径 (默认: package.json)'
+        default='package_cfg.json',
+        help='配置文件路径 (默认: package_cfg.json)'
     )
     
     args = parser.parse_args()

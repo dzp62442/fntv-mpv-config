@@ -6,11 +6,11 @@ on:
     - cron: '0 8 * * *'
   # 允许手动触发
   workflow_dispatch:
-  # 推送到main分支时也触发
+  # 推送到release分支时也触发
   push:
-    branches: [ main, master ]
+    branches: [ release, master ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ release, master ]
 
 jobs:
   build:

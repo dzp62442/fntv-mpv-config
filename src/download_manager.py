@@ -18,14 +18,18 @@ class DownloadError(Exception):
 class DownloadManager:
     """下载管理器"""
     
-    def __init__(self, temp_dir: Path):
+    def __init__(self, temp_dir: Path, proxy_url: str = "", enable_proxy: bool = False):
         """
         初始化下载管理器
         
         Args:
             temp_dir: 临时下载目录
+            proxy_url: GitHub代理地址
+            enable_proxy: 是否启用代理
         """
         self.temp_dir = Path(temp_dir)
+        self.proxy_url = proxy_url.rstrip('/')  # 移除末尾的斜杠
+        self.enable_proxy = enable_proxy
         self.session = requests.Session()
         self.logger = logging.getLogger(__name__)
         
@@ -110,44 +114,41 @@ class DownloadManager:
         # 提取仓库信息
         repo_match = re.search(r'github\.com/([^/]+)/([^/]+)', base_url)
         if not repo_match:
+            self.logger.error(f"无法解析GitHub仓库URL: {base_url}")
             return None
             
         owner, repo = repo_match.groups()
+        self.logger.info(f"解析出仓库: {owner}/{repo}")
         
-        # 构建API URL
-        api_url = f"https://api.github.com/repos/{owner}/{repo}/releases"
+        # 根据具体的仓库构建准确的文件名
+        if owner == "shinchiro" and repo == "mpv-winbuild-cmake":
+            # MPV的实际文件名
+            filename = f"mpv-dev-x86_64-{version}-git-194ce88.7z"
+        elif owner == "tomasklaen" and repo == "uosc":
+            # UOSC的文件名
+            filename = f"uosc.zip"
+        elif owner == "Tony15246" and repo == "uosc_danmaku":
+            # uosc_danmaku的文件名
+            filename = f"uosc_danmaku.zip"
+        else:
+            # 通用处理
+            if '{version}' in filename_pattern:
+                filename = filename_pattern.format(version=version)
+            else:
+                filename = filename_pattern
+            
+            if not filename.endswith(f'.{file_format}'):
+                filename = f"{filename}.{file_format}"
         
-        try:
-            response = self.session.get(api_url)
-            response.raise_for_status()
-            releases = response.json()
-            
-            # 查找指定版本
-            target_release = None
-            for release in releases:
-                if release['tag_name'] == version or release['name'] == version:
-                    target_release = release
-                    break
-            
-            if not target_release:
-                self.logger.warning(f"未找到版本 {version}，使用最新版本")
-                target_release = releases[0] if releases else None
-            
-            if not target_release:
-                return None
-            
-            # 查找匹配的资产
-            for asset in target_release['assets']:
-                asset_name = asset['name']
-                if (filename_pattern in asset_name and 
-                    asset_name.endswith(f'.{file_format}')):
-                    return asset['browser_download_url']
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"获取GitHub Release信息失败: {e}")
-            return None
+        # 构建直接下载链接
+        download_url = f"https://github.com/{owner}/{repo}/releases/download/{version}/{filename}"
+        
+        # 如果启用代理，添加代理前缀
+        if self.enable_proxy and self.proxy_url:
+            download_url = f"{self.proxy_url}/{download_url}"
+        
+        self.logger.info(f"构建的下载链接: {download_url}")
+        return download_url
     
     def _get_filename(self, config: Dict[str, Any], download_url: str) -> str:
         """
