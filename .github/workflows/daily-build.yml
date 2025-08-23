@@ -54,6 +54,9 @@ jobs:
       run: |
         python run.py --log-level INFO
       env:
+        # 设置UTF-8编码以支持中文日志
+        PYTHONIOENCODING: utf-8
+        PYTHONLEGACYWINDOWSSTDIO: utf-8
         # 如果需要访问私有仓库，可以设置GitHub token
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     
