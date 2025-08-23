@@ -51,19 +51,24 @@ class InstallManager:
         self.logger.info(f"开始安装 {name}")
         
         try:
-            # 获取安装规则
-            install_rules = config.get('install_rules', [])
+            # 获取文件排除配置
+            excludes = config.get('exclude_files', [])
             
-            if extracted_path and install_rules:
-                # 根据规则复制文件
-                for rule in install_rules:
-                    self._apply_install_rule(name, rule, extracted_path)
+            # 获取自定义配置安装规则
+            custom_config_rules = config.get('custom_config_rules', [])
+            
+            if extracted_path:
+                # 默认安装所有解压文件到相应目录，但排除指定文件
+                self._install_extracted_files(name, config, extracted_path, excludes)
+                
+                # 如果有自定义配置规则，则按规则安装
+                if custom_config_rules:
+                    for rule in custom_config_rules:
+                        self._apply_custom_config_rule(name, rule, extracted_path)
             elif not extracted_path:
                 self.logger.info(f"{name} 没有解压内容，仅安装自定义配置")
-            else:
-                self.logger.warning(f"{name} 没有定义安装规则，跳过文件安装")
             
-            # 安装自定义配置
+            # 安装custom_config目录下的自定义配置
             self._install_custom_config(name)
             
             self.logger.info(f"{name} 安装完成")
@@ -71,18 +76,54 @@ class InstallManager:
         except Exception as e:
             raise InstallError(f"安装 {name} 失败: {e}")
     
-    def _apply_install_rule(self, name: str, rule: Dict[str, Any], source_base: Path):
+    def _install_extracted_files(self, name: str, config: Dict[str, Any], extracted_path: Path, excludes: List[str]):
         """
-        应用单个安装规则
+        安装解压的文件到默认位置，排除指定文件
         
         Args:
             name: 依赖项名称
-            rule: 安装规则
+            config: 依赖项配置
+            extracted_path: 解压路径
+            excludes: 排除的文件模式
+        """
+        # 根据插件类型决定默认安装位置
+        if name == 'mpv':
+            # MPV主程序安装到根目录
+            target_path = self.output_dir
+        elif name == 'uosc':
+            # uosc插件不使用默认安装，因为它有特殊的目录结构
+            self.logger.info(f"{name} 使用自定义配置规则，跳过默认安装")
+            return
+        elif name.startswith('uosc'):
+            # 其他uosc相关插件安装到scripts目录
+            target_path = self.output_dir / "portable_config" / "scripts" / name
+        else:
+            # 其他插件默认安装到scripts目录
+            target_path = self.output_dir / "portable_config" / "scripts" / name
+        
+        self.logger.debug(f"默认安装: {extracted_path} -> {target_path}")
+        if excludes:
+            self.logger.debug(f"排除文件: {excludes}")
+        
+        # 创建目标目录
+        target_path.mkdir(parents=True, exist_ok=True)
+        
+        # 复制所有文件，但排除指定模式
+        self._copy_filtered_files(extracted_path, target_path, "**/*", excludes)
+    
+    def _apply_custom_config_rule(self, name: str, rule: Dict[str, Any], source_base: Path):
+        """
+        应用自定义配置规则（从解压包中提取特定文件到指定位置）
+        
+        Args:
+            name: 依赖项名称
+            rule: 自定义配置规则
             source_base: 源目录基础路径
         """
         source_rel = rule['from']
         target_rel = rule['to']
         filters = rule.get('filter', ['**/*'])
+        excludes = rule.get('exclude', [])  # 自定义配置规则也支持排除
         
         # 构建完整路径
         source_path = source_base / source_rel if source_rel else source_base
@@ -101,7 +142,9 @@ class InstallManager:
             # 其他情况默认放在portable_config目录下
             target_path = self.portable_config_dir / target_rel
         
-        self.logger.debug(f"应用规则: {source_path} -> {target_path}")
+        self.logger.debug(f"应用自定义配置规则: {source_path} -> {target_path}")
+        if excludes:
+            self.logger.debug(f"排除模式: {excludes}")
         
         if not source_path.exists():
             self.logger.warning(f"源路径不存在: {source_path}")
@@ -110,44 +153,59 @@ class InstallManager:
         # 创建目标目录
         target_path.mkdir(parents=True, exist_ok=True)
         
-        # 根据过滤器复制文件
+        # 根据过滤器复制文件，应用排除规则
         for filter_pattern in filters:
-            self._copy_filtered_files(source_path, target_path, filter_pattern)
+            self._copy_filtered_files(source_path, target_path, filter_pattern, excludes)
+        target_path.mkdir(parents=True, exist_ok=True)
+        
+        # 根据过滤器复制文件，应用排除规则
+        for filter_pattern in filters:
+            self._copy_filtered_files(source_path, target_path, filter_pattern, excludes)
     
-    def _copy_filtered_files(self, source_path: Path, target_path: Path, pattern: str):
+    def _copy_filtered_files(self, source_path: Path, target_path: Path, pattern: str, excludes: Optional[List[str]] = None):
         """
-        根据模式复制文件
+        根据模式复制文件，支持排除规则
         
         Args:
             source_path: 源路径
             target_path: 目标路径
             pattern: 文件模式
+            excludes: 排除模式列表
         """
+        if excludes is None:
+            excludes = []
+            
         if source_path.is_file():
             # 如果源是文件，直接检查是否匹配模式
             if fnmatch.fnmatch(source_path.name, pattern):
-                target_file = target_path / source_path.name
-                self._copy_file(source_path, target_file)
+                # 检查是否被排除
+                if not self._is_excluded(str(source_path.name), excludes):
+                    target_file = target_path / source_path.name
+                    self._copy_file(source_path, target_file)
         else:
             # 如果源是目录，遍历所有文件
-            self._copy_directory_filtered(source_path, target_path, pattern)
+            self._copy_directory_filtered(source_path, target_path, pattern, excludes)
     
-    def _copy_directory_filtered(self, source_dir: Path, target_dir: Path, pattern: str):
+    def _copy_directory_filtered(self, source_dir: Path, target_dir: Path, pattern: str, excludes: Optional[List[str]] = None):
         """
-        递归复制目录中匹配模式的文件
+        递归复制目录中匹配模式的文件，支持排除规则
         
         Args:
             source_dir: 源目录
             target_dir: 目标目录
             pattern: 文件模式
+            excludes: 排除模式列表
         """
+        if excludes is None:
+            excludes = []
+            
         for item in source_dir.rglob('*'):
             if item.is_file():
                 # 计算相对路径
                 rel_path = item.relative_to(source_dir)
                 
-                # 检查文件是否匹配模式
-                if self._matches_pattern(str(rel_path), pattern):
+                # 检查文件是否匹配模式且未被排除
+                if self._matches_pattern(str(rel_path), pattern) and not self._is_excluded(str(rel_path), excludes):
                     target_file = target_dir / rel_path
                     target_file.parent.mkdir(parents=True, exist_ok=True)
                     self._copy_file(item, target_file)
@@ -163,20 +221,64 @@ class InstallManager:
         Returns:
             是否匹配
         """
-        # 处理不同类型的模式
+        import fnmatch
+        
+        # 将Windows路径分隔符统一为Unix格式进行匹配
+        normalized_path = file_path.replace('\\', '/')
+        normalized_pattern = pattern.replace('\\', '/')
+        
+        # 简单但有效的处理方式
         if pattern == '**/*':
             return True
-        elif pattern.startswith('**/'):
-            # 匹配任意深度的特定文件
-            file_pattern = pattern[3:]
-            return fnmatch.fnmatch(Path(file_path).name, file_pattern)
-        elif pattern.endswith('/**'):
-            # 匹配特定目录下的所有文件
-            dir_pattern = pattern[:-3]
-            return file_path.startswith(dir_pattern)
+        
+        # 使用Python的fnmatch.fnmatch，它支持基本的glob模式
+        # 但不支持**，所以我们需要手动处理
+        if '**' in normalized_pattern:
+            # 将**替换为*来进行近似匹配，或者使用更简单的包含检查
+            if normalized_pattern.startswith('**/'):
+                # **/pattern -> 检查文件名是否匹配
+                sub_pattern = normalized_pattern[3:]
+                return fnmatch.fnmatch(Path(file_path).name, sub_pattern)
+            elif normalized_pattern.endswith('/**'):
+                # pattern/** -> 检查路径是否包含该目录
+                dir_name = normalized_pattern[:-3]
+                return dir_name in normalized_path.split('/')
+            elif '/**/' in normalized_pattern:
+                # pattern/**/pattern -> 检查是否包含前后模式
+                parts = normalized_pattern.split('/**/')
+                if len(parts) == 2:
+                    prefix, suffix = parts
+                    return prefix in normalized_path and suffix in normalized_path
+                return False
+            else:
+                # 其他**模式，简化处理
+                simple_pattern = normalized_pattern.replace('**', '*')
+                return fnmatch.fnmatch(normalized_path, simple_pattern)
         else:
             # 普通模式匹配
-            return fnmatch.fnmatch(file_path, pattern)
+            return fnmatch.fnmatch(normalized_path, normalized_pattern)
+    
+    def _match_recursive_pattern(self, file_path: str, pattern: str) -> bool:
+        """
+        递归匹配包含**的模式 - 保留接口但简化实现
+        """
+        return self._matches_pattern(file_path, pattern)
+    
+    def _is_excluded(self, file_path: str, excludes: List[str]) -> bool:
+        """
+        检查文件路径是否被排除
+        
+        Args:
+            file_path: 文件路径
+            excludes: 排除模式列表
+            
+        Returns:
+            是否被排除
+        """
+        for exclude_pattern in excludes:
+            if self._matches_pattern(file_path, exclude_pattern):
+                return True
+        return False
     
     def _copy_file(self, source: Path, target: Path):
         """

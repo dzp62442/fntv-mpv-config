@@ -8,9 +8,11 @@
 - 🔧 **版本控制**: 通过配置文件管理所有组件版本
 - 🔌 **插件热插拔**: 轻松启用/禁用插件
 - 📦 **智能打包**: 自动创建便携式安装包
-- �️ **多格式支持**: 支持7z、zip、rar等多种压缩格式
-- �🛠️ **自定义配置**: 支持自定义配置文件
+- 🗜️ **多格式支持**: 支持7z、zip、rar等多种压缩格式
+- 🛠️ **自定义配置**: 支持自定义配置文件
 - 🚀 **CI/CD支持**: GitHub Actions每日自动构建
+- 🚫 **智能过滤**: 双层文件过滤系统，排除不需要的文件
+- ⚙️ **灵活配置**: 分离式配置设计，清晰的文件排除和自定义安装规则
 
 ## 项目结构
 
@@ -134,14 +136,38 @@ python run.py --clean all       # 清理所有临时文件和构建产物
       "name": "mpv播放器",
       "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
       "version": "20250823",
-      "filename_pattern": "mpv-x86_64-20250823",
+      "filename_pattern": "mpv-x86_64-{version}",
       "format": "7z",
       "enabled": true,
-      "install_rules": [
+      "exclude_files": [                // 排除不需要的文件
+        "doc/*",
+        "installer/*", 
+        "*.bat",
+        "*.md",
+        "LICENSE*"
+      ]
+    },
+    "uosc": {
+      "name": "uosc插件",
+      "url": "https://github.com/tomasklaen/uosc/releases", 
+      "version": "5.11.0",
+      "filename_pattern": "uosc",
+      "format": "zip",
+      "enabled": true,
+      "exclude_files": [                // 排除文档和许可证文件
+        "*.md",
+        "LICENSE*"
+      ],
+      "custom_config_rules": [          // 自定义安装规则
         {
-          "from": "uosc/conf",          // 源目录
-          "to": "script-opts",          // 目标目录
+          "from": "scripts",            // 源目录
+          "to": "portable_config/scripts", // 目标目录
           "filter": ["**/*"]            // 文件过滤器
+        },
+        {
+          "from": "fonts",
+          "to": "portable_config/fonts",
+          "filter": ["**/*"]
         }
       ]
     }
@@ -149,14 +175,113 @@ python run.py --clean all       # 清理所有临时文件和构建产物
 }
 ```
 
-### 安装规则说明
+### 配置参数说明
+
+#### 核心配置参数
+
+- `exclude_files`: 排除文件数组，在安装时排除不需要的文件和目录
+- `custom_config_rules`: 自定义配置安装规则数组（可选）
+
+#### exclude_files 排除模式
+
+`exclude_files` 用于排除下载内容中不需要的文件，支持glob模式：
+
+```json
+{
+  "exclude_files": [
+    "*.md",              // 排除所有markdown文档
+    "LICENSE*",          // 排除许可证文件
+    "doc/*",            // 排除doc目录下的所有文件
+    "installer/*",      // 排除installer目录
+    "*.bat",            // 排除批处理文件
+    "**/.github/**",    // 排除GitHub工作流目录
+    "**/test/**",       // 排除测试目录
+    "**/docs/**"        // 排除文档目录
+  ]
+}
+```
+
+#### custom_config_rules 自定义安装规则
+
+`custom_config_rules` 用于定义特殊的文件安装规则：
 
 - `from`: 源目录路径（相对于解压后的根目录）
-- `to`: 目标目录路径（相对于portable_config目录）
+- `to`: 目标目录路径（相对于输出根目录）
 - `filter`: 文件过滤器数组，支持glob模式
   - `**/*`: 所有文件
   - `*.lua`: 所有Lua文件
   - `**/script-opts/**`: script-opts目录下的所有文件
+
+### 配置工作原理
+
+1. **默认安装**: 所有文件默认会被安装到相应位置
+2. **文件排除**: 应用 `exclude_files` 模式排除不需要的文件
+3. **自定义规则**: 如果定义了 `custom_config_rules`，则使用自定义规则而非默认安装
+
+### 配置示例详解
+
+#### 简单插件（仅排除文档文件）
+
+```json
+{
+  "uosc_danmaku": {
+    "name": "uosc弹幕插件",
+    "url": "https://github.com/Tony15246/uosc_danmaku/releases",
+    "version": "v1.3.2",
+    "exclude_files": [
+      "*.md",              // 排除README.md等文档
+      "LICENSE*"           // 排除许可证文件
+    ]
+  }
+}
+```
+
+#### 复杂插件（自定义安装规则）
+
+```json
+{
+  "uosc": {
+    "name": "uosc插件", 
+    "url": "https://github.com/tomasklaen/uosc/releases",
+    "version": "5.11.0",
+    "exclude_files": [
+      "*.md",
+      "LICENSE*"
+    ],
+    "custom_config_rules": [
+      {
+        "from": "scripts",              // 脚本文件
+        "to": "portable_config/scripts",
+        "filter": ["**/*"]
+      },
+      {
+        "from": "fonts",                // 字体文件
+        "to": "portable_config/fonts", 
+        "filter": ["**/*"]
+      }
+    ]
+  }
+}
+```
+
+#### MPV主程序（排除调试和文档文件）
+
+```json
+{
+  "mpv": {
+    "name": "mpv播放器",
+    "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
+    "version": "20250823", 
+    "exclude_files": [
+      "doc/*",             // 排除文档目录
+      "installer/*",       // 排除安装程序
+      "*.bat",            // 排除批处理文件
+      "*.md",             // 排除文档
+      "LICENSE*"          // 排除许可证
+    ]
+  }
+}
+```
 
 ## 自定义配置
 
@@ -193,6 +318,39 @@ custom_config/
 - 创建带时间戳的Release
 - 支持构建失败时的错误处理
 
+## 配置架构说明
+
+### 双层配置系统 (v1.0.0+)
+
+本工具采用双层配置系统，将文件过滤和自定义安装规则分离：
+
+#### 1. exclude_files - 文件排除层
+- **目的**: 排除下载内容中不需要的文件
+- **时机**: 在默认安装过程中应用
+- **适用场景**: 排除文档、许可证、调试文件等
+
+#### 2. custom_config_rules - 自定义安装层  
+- **目的**: 定义特殊的文件安装规则
+- **时机**: 覆盖默认安装行为
+- **适用场景**: 复杂的目录结构映射
+
+### 处理流程
+
+```
+下载文件 → 解压 → 应用exclude_files → 默认安装 OR 自定义规则安装
+```
+
+1. **下载解压**: 从GitHub下载并解压文件
+2. **文件过滤**: 应用`exclude_files`排除不需要的文件  
+3. **安装选择**:
+   - 如果定义了`custom_config_rules`: 使用自定义规则
+   - 否则: 使用默认安装（直接复制到相应目录）
+
+### 配置优先级
+
+- `custom_config_rules` > 默认安装
+- `exclude_files` 在任何安装方式中都会被应用
+
 ## 开发指南
 
 ### 模块设计
@@ -214,7 +372,7 @@ custom_config/
 ### 调试技巧
 
 ```bash
-# 启用详细日志
+# 启用详细日志（推荐用于排除模式调试）
 python run.py --log-level DEBUG
 
 # 跳过下载步骤（用于测试安装逻辑）
@@ -222,17 +380,69 @@ python run.py --skip-download
 
 # 不清理临时文件（用于检查中间结果）
 python run.py --no-cleanup
+
+# 只处理特定依赖项
+python run.py --deps uosc,uosc_danmaku
 ```
+
+#### 文件排除调试
+
+当使用`--log-level DEBUG`时，可以看到文件排除过程的详细信息：
+
+```
+DEBUG - 应用exclude_files: ['*.md', 'LICENSE*']
+DEBUG - 已复制: temp\uosc_extracted\scripts\uosc\main.lua -> output\...
+DEBUG - 排除文件: README.md (匹配模式: *.md)
+DEBUG - 排除文件: LICENSE (匹配模式: LICENSE*)
+DEBUG - 应用自定义配置规则: scripts -> portable_config/scripts
+```
+
+这有助于验证排除规则是否按预期工作。
 
 ## 运行测试
 
-```bash
-# 运行所有测试
-python -m pytest tests/
+项目包含完整的单元测试，支持多种运行方式：
 
-# 运行特定测试
+### 推荐方式：使用内置测试运行器
+
+```bash
+# 运行所有测试（推荐）
+python run_tests.py
+
+# 输出示例：
+# 运行MPV配置管理工具测试...
+# test_config_validation ... ok  
+# test_is_excluded ... ok
+# ✅ 所有测试通过!
+```
+
+### 直接运行测试文件
+
+```bash
+# 运行测试文件
 python tests/test_all.py
 ```
+
+### 使用pytest（如果遇到卡死问题，请使用上述方式）
+
+```bash
+# 使用pytest（可能在某些环境中卡死）
+python -m pytest tests/ -v
+```
+
+### 测试覆盖范围
+
+- ✅ **ConfigManager**: 配置加载、验证、依赖项管理
+- ✅ **DownloadManager**: URL解析、初始化测试  
+- ✅ **ExtractManager**: 格式识别
+- ✅ **InstallManager**: 模式匹配、排除功能测试
+
+### 故障排除
+
+如果`pytest`命令卡死或无响应：
+1. 使用`python run_tests.py`代替
+2. 或直接运行`python tests/test_all.py`
+3. 检查网络连接（某些测试可能需要访问GitHub API）
 
 ## 常见问题
 
@@ -260,19 +470,37 @@ A: 确认配置文件放在正确的`custom_config`目录结构中，并且文�
 ### Q: GitHub Actions构建失败？
 A: 检查`package_cfg.json`中的版本号是否存在，网络访问是否正常，依赖项是否正确安装。
 
+### Q: 排除模式不生效怎么办？
+A: 
+1. 使用`--log-level DEBUG`查看排除过程详细信息
+2. 确认排除模式语法正确，使用正斜杠`/`作为路径分隔符
+3. 注意排除模式区分大小写
+4. 确认排除的是相对于`from`目录的相对路径
+5. 检查是否同时被`filter`包含和`exclude`排除（exclude优先）
+
+#### 排除模式语法示例：
+```json
+"exclude": [
+  "*.md",           // ✅ 正确：排除所有.md文件
+  "*.MD",           // ⚠️  注意：区分大小写，只排除.MD文件
+  "LICENSE*",       // ✅ 正确：排除以LICENSE开头的文件
+  "**/.git*",       // ✅ 正确：排除任意深度的.git相关文件
+  "test\\**",       // ❌ 错误：应使用正斜杠 "test/**"
+  "docs/**/*.md"    // ✅ 正确：排除docs目录下的所有.md文件
+]
+```
+
+### Q: 如何验证排除模式是否正确？
+A: 使用DEBUG模式运行特定依赖项：
+```bash
+python run.py --deps plugin_name --log-level DEBUG --no-cleanup
+```
+然后检查输出日志和生成的文件。
+
 ## 许可证
 
 本项目采用MIT许可证，详见LICENSE文件。
 
-## 贡献指南
-
-欢迎提交Issue和Pull Request来改进这个项目：
-
-1. Fork本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开Pull Request
 
 ## 更新日志
 

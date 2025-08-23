@@ -61,6 +61,8 @@ class ConfigManager:
         """获取完整配置"""
         if self._config is None:
             self.load_config()
+        if self._config is None:
+            raise ConfigError("配置未加载")
         return self._config
     
     def get_output_dir(self) -> Path:

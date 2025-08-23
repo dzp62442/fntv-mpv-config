@@ -17,14 +17,12 @@
             "version": "20250823",
             "filename_pattern": "mpv-x86_64-{version}",
             "format": "7z",
-            "install_rules": [
-                {
-                    "from": "",
-                    "to": "",
-                    "filter": [
-                       "**/*"
-                    ]
-                }
+            "exclude_files": [
+                "doc/*",
+                "installer/*",
+                "*.bat",
+                "*.md",
+                "LICENSE*"
             ]
         },
         "uosc": {
@@ -34,20 +32,20 @@
             "version": "5.11.0",
             "filename_pattern": "uosc",
             "format": "zip",
-            "install_rules": [
+            "exclude_files": [
+                "*.md",
+                "LICENSE*"
+            ],
+            "custom_config_rules": [
                 {
                     "from": "scripts",
                     "to": "portable_config/scripts",
-                    "filter": [
-                        "**/*"
-                    ]
+                    "filter": ["**/*"]
                 },
                 {
                     "from": "fonts",
                     "to": "portable_config/fonts",
-                    "filter": [
-                        "**/*"
-                    ]
+                    "filter": ["**/*"]
                 }
             ]
         },
@@ -58,14 +56,9 @@
             "version": "v1.3.2",
             "filename_pattern": "uosc_danmaku",
             "format": "zip",
-            "install_rules": [
-                {
-                    "from": "",
-                    "to": "portable_config/scripts/uosc_danmaku",
-                    "filter": [
-                        "**/*"
-                    ]
-                }
+            "exclude_files": [
+                "*.md",
+                "LICENSE*"
             ]
         }
     }
