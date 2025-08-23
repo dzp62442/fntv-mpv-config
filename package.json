@@ -1,0 +1,67 @@
+{
+  "name": "fntv-mpv-config",
+  "version": "1.0.0",
+  "description": "MPV播放器和插件管理工具",
+  "config": {
+    "output_dir": "./output",
+    "temp_dir": "./temp",
+    "custom_config_dir": "./custom_config"
+  },
+  "dependencies": {
+    "mpv": {
+      "name": "mpv播放器",
+      "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
+      "version": "20250823",
+      "filename_pattern": "mpv-x86_64-20250823",
+      "format": "7z",
+      "enabled": true,
+      "install_rules": [
+        {
+          "from": "uosc/conf",
+          "to": "script-opts",
+          "filter": ["**/*"]
+        },
+        {
+          "from": "mpv",
+          "to": "",
+          "filter": ["input.conf"]
+        }
+      ]
+    },
+    "uosc": {
+      "name": "uosc插件",
+      "url": "https://github.com/tomasklaen/uosc/releases",
+      "version": "5.11.0",
+      "filename_pattern": "uosc",
+      "format": "7z",
+      "enabled": true,
+      "install_rules": [
+        {
+          "from": "scripts",
+          "to": "scripts",
+          "filter": ["**/*.lua"]
+        },
+        {
+          "from": "fonts",
+          "to": "fonts",
+          "filter": ["**/*"]
+        }
+      ]
+    },
+    "uosc_danmaku": {
+      "name": "uosc弹幕插件",
+      "url": "https://github.com/Tony15246/uosc_danmaku/releases",
+      "version": "v1.3.2",
+      "filename_pattern": "uosc_danmaku",
+      "format": "zip",
+      "enabled": true,
+      "install_rules": [
+        {
+          "from": "scripts",
+          "to": "scripts",
+          "filter": ["**/*.lua"]
+        }
+      ]
+    }
+  }
+}

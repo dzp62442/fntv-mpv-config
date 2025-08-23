@@ -1,0 +1,321 @@
+"""
+主程序模块
+协调各个模块的工作，提供命令行界面
+"""
+import argparse
+import sys
+from pathlib import Path
+from typing import List, Optional
+
+from .config_manager import ConfigManager, ConfigError
+from .download_manager import DownloadManager, DownloadError
+from .extract_manager import ExtractManager, ExtractError
+from .install_manager import InstallManager, InstallError
+from .log_manager import LogManager
+
+
+class MPVConfigManager:
+    """MPV配置管理器主类"""
+    
+    def __init__(self, config_path: str = "package.json", log_level: str = "INFO"):
+        """
+        初始化MPV配置管理器
+        
+        Args:
+            config_path: 配置文件路径
+            log_level: 日志级别
+        """
+        # 初始化日志
+        self.log_manager = LogManager(log_level)
+        self.logger = self.log_manager.get_logger(__name__)
+        
+        # 初始化配置管理器
+        self.config_manager = ConfigManager(config_path)
+        
+        # 其他管理器将在需要时初始化
+        self.download_manager = None
+        self.extract_manager = None
+        self.install_manager = None
+    
+    def run(self, dependencies: Optional[List[str]] = None, 
+            skip_download: bool = False, 
+            skip_install: bool = False,
+            create_package: bool = True,
+            cleanup: bool = True) -> bool:
+        """
+        运行主流程
+        
+        Args:
+            dependencies: 要处理的依赖项名称列表，None表示处理所有启用的依赖项
+            skip_download: 跳过下载步骤
+            skip_install: 跳过安装步骤
+            create_package: 是否创建安装包
+            cleanup: 是否清理临时文件
+            
+        Returns:
+            是否成功
+        """
+        try:
+            self.logger.info("开始MPV配置管理流程")
+            
+            # 加载配置
+            config = self.config_manager.load_config()
+            self.logger.info(f"配置加载完成: {config['name']} v{config['version']}")
+            
+            # 初始化管理器
+            self._initialize_managers()
+            
+            # 获取要处理的依赖项
+            target_dependencies = self._get_target_dependencies(dependencies)
+            self.logger.info(f"将处理以下依赖项: {list(target_dependencies.keys())}")
+            
+            # 处理每个依赖项
+            extracted_paths = {}
+            for dep_name, dep_config in target_dependencies.items():
+                try:
+                    if not skip_download and self.download_manager and self.extract_manager:
+                        # 下载
+                        downloaded_file = self.download_manager.download_dependency(dep_name, dep_config)
+                        
+                        # 解压
+                        extracted_path = self.extract_manager.extract_archive(downloaded_file)
+                        content_path = self.extract_manager.find_extracted_content(extracted_path)
+                        extracted_paths[dep_name] = content_path
+                    
+                    if not skip_install and dep_name in extracted_paths and self.install_manager:
+                        # 安装
+                        self.install_manager.install_dependency(dep_name, dep_config, extracted_paths[dep_name])
+                
+                except Exception as e:
+                    self.logger.error(f"处理依赖项 {dep_name} 失败: {e}")
+                    if not self._should_continue_on_error():
+                        return False
+            
+            # 创建安装包
+            if create_package and not skip_install and self.install_manager:
+                package_path = self.install_manager.create_package()
+                self.logger.info(f"安装包已创建: {package_path}")
+            
+            # 清理临时文件
+            if cleanup:
+                self._cleanup()
+            
+            self.logger.info("MPV配置管理流程完成")
+            return True
+            
+        except Exception as e:
+            self.logger.error(f"运行失败: {e}")
+            return False
+    
+    def _initialize_managers(self):
+        """初始化各个管理器"""
+        temp_dir = self.config_manager.get_temp_dir()
+        output_dir = self.config_manager.get_output_dir()
+        custom_config_dir = self.config_manager.get_custom_config_dir()
+        
+        self.download_manager = DownloadManager(temp_dir)
+        self.extract_manager = ExtractManager(temp_dir)
+        self.install_manager = InstallManager(output_dir, custom_config_dir)
+    
+    def _get_target_dependencies(self, dependencies: Optional[List[str]]) -> dict:
+        """
+        获取目标依赖项
+        
+        Args:
+            dependencies: 指定的依赖项列表
+            
+        Returns:
+            目标依赖项字典
+        """
+        all_dependencies = self.config_manager.get_enabled_dependencies()
+        
+        if dependencies is None:
+            return all_dependencies
+        
+        target_dependencies = {}
+        for dep_name in dependencies:
+            if dep_name in all_dependencies:
+                target_dependencies[dep_name] = all_dependencies[dep_name]
+            else:
+                self.logger.warning(f"依赖项 {dep_name} 不存在或未启用")
+        
+        return target_dependencies
+    
+    def _should_continue_on_error(self) -> bool:
+        """是否在错误时继续执行"""
+        # 可以从配置文件读取，这里默认返回False
+        return False
+    
+    def _cleanup(self):
+        """清理临时文件"""
+        try:
+            if self.download_manager:
+                self.download_manager.cleanup()
+            if self.extract_manager:
+                # extract_manager的清理在install完成后自动进行
+                pass
+        except Exception as e:
+            self.logger.warning(f"清理失败: {e}")
+    
+    def list_dependencies(self):
+        """列出所有依赖项"""
+        try:
+            dependencies = self.config_manager.get_enabled_dependencies()
+            
+            self.logger.info("可用的依赖项:")
+            for name, config in dependencies.items():
+                status = "启用" if config.get('enabled', True) else "禁用"
+                self.logger.info(f"  - {name}: {config['name']} v{config['version']} ({status})")
+                
+        except Exception as e:
+            self.logger.error(f"列出依赖项失败: {e}")
+    
+    def enable_dependency(self, name: str):
+        """启用依赖项"""
+        try:
+            config = self.config_manager.get_config()
+            if name in config['dependencies']:
+                config['dependencies'][name]['enabled'] = True
+                self.config_manager.save_config(config)
+                self.logger.info(f"已启用依赖项: {name}")
+            else:
+                self.logger.error(f"依赖项不存在: {name}")
+        except Exception as e:
+            self.logger.error(f"启用依赖项失败: {e}")
+    
+    def disable_dependency(self, name: str):
+        """禁用依赖项"""
+        try:
+            config = self.config_manager.get_config()
+            if name in config['dependencies']:
+                config['dependencies'][name]['enabled'] = False
+                self.config_manager.save_config(config)
+                self.logger.info(f"已禁用依赖项: {name}")
+            else:
+                self.logger.error(f"依赖项不存在: {name}")
+        except Exception as e:
+            self.logger.error(f"禁用依赖项失败: {e}")
+
+
+def create_cli_parser() -> argparse.ArgumentParser:
+    """创建命令行参数解析器"""
+    parser = argparse.ArgumentParser(
+        description="MPV播放器和插件管理工具",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+示例用法:
+  python -m src.main                          # 处理所有启用的依赖项
+  python -m src.main --deps mpv uosc          # 只处理指定的依赖项
+  python -m src.main --list                   # 列出所有依赖项
+  python -m src.main --enable uosc_danmaku    # 启用指定依赖项
+  python -m src.main --disable uosc_danmaku   # 禁用指定依赖项
+  python -m src.main --skip-download          # 跳过下载，直接安装
+  python -m src.main --skip-install           # 只下载，不安装
+        """
+    )
+    
+    # 主要操作参数
+    parser.add_argument(
+        '--config', '-c',
+        default='package.json',
+        help='配置文件路径 (默认: package.json)'
+    )
+    
+    parser.add_argument(
+        '--deps', '--dependencies',
+        nargs='*',
+        help='要处理的依赖项名称列表'
+    )
+    
+    # 控制选项
+    parser.add_argument(
+        '--skip-download',
+        action='store_true',
+        help='跳过下载步骤'
+    )
+    
+    parser.add_argument(
+        '--skip-install',
+        action='store_true',
+        help='跳过安装步骤'
+    )
+    
+    parser.add_argument(
+        '--no-package',
+        action='store_true',
+        help='不创建安装包'
+    )
+    
+    parser.add_argument(
+        '--no-cleanup',
+        action='store_true',
+        help='不清理临时文件'
+    )
+    
+    # 管理操作
+    parser.add_argument(
+        '--list',
+        action='store_true',
+        help='列出所有依赖项'
+    )
+    
+    parser.add_argument(
+        '--enable',
+        help='启用指定的依赖项'
+    )
+    
+    parser.add_argument(
+        '--disable',
+        help='禁用指定的依赖项'
+    )
+    
+    # 日志选项
+    parser.add_argument(
+        '--log-level',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+        default='INFO',
+        help='日志级别 (默认: INFO)'
+    )
+    
+    return parser
+
+
+def main():
+    """主函数"""
+    parser = create_cli_parser()
+    args = parser.parse_args()
+    
+    try:
+        # 创建管理器实例
+        manager = MPVConfigManager(args.config, args.log_level)
+        
+        # 执行相应的操作
+        if args.list:
+            manager.list_dependencies()
+        elif args.enable:
+            manager.enable_dependency(args.enable)
+        elif args.disable:
+            manager.disable_dependency(args.disable)
+        else:
+            # 执行主流程
+            success = manager.run(
+                dependencies=args.deps,
+                skip_download=args.skip_download,
+                skip_install=args.skip_install,
+                create_package=not args.no_package,
+                cleanup=not args.no_cleanup
+            )
+            
+            if not success:
+                sys.exit(1)
+    
+    except KeyboardInterrupt:
+        print("\n操作被用户中断")
+        sys.exit(1)
+    except Exception as e:
+        print(f"程序运行失败: {e}")
+        sys.exit(1)
+
+
+if __name__ == '__main__':
+    main()

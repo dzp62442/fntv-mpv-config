@@ -1,0 +1,105 @@
+name: Daily MPV Package Build
+
+on:
+  schedule:
+    # 每天早上8点（UTC）运行，即北京时间下午4点
+    - cron: '0 8 * * *'
+  # 允许手动触发
+  workflow_dispatch:
+  # 推送到main分支时也触发
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+    
+    - name: Create output directory
+      run: |
+        mkdir -p output
+        mkdir -p temp
+    
+    - name: Run MPV config build
+      run: |
+        python -m src.main --log-level INFO
+      env:
+        # 如果需要访问私有仓库，可以设置GitHub token
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: List output files
+      run: |
+        echo "Generated files:"
+        ls -la output/
+      shell: bash
+    
+    - name: Get current date
+      id: date
+      run: echo "DATE=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
+      shell: bash
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: mpv-package-${{ steps.date.outputs.DATE }}
+        path: output/
+        retention-days: 30
+    
+    - name: Create Release (if on main branch)
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: daily-${{ steps.date.outputs.DATE }}
+        release_name: Daily Build ${{ steps.date.outputs.DATE }}
+        body: |
+          自动构建的MPV配置包
+          
+          构建时间: ${{ steps.date.outputs.DATE }}
+          
+          包含内容:
+          - MPV播放器
+          - uosc插件
+          - uosc_danmaku插件
+          - 自定义配置文件
+          
+          ## 使用方法
+          1. 下载并解压包文件
+          2. 直接运行MPV播放器
+          3. 享受预配置的播放体验
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: output/mpv-package-*.zip
+        asset_name: mpv-package-${{ steps.date.outputs.DATE }}.zip
+        asset_content_type: application/zip
+    
+    - name: Cleanup
+      if: always()
+      run: |
+        # 清理临时文件
+        rm -rf temp/
+      shell: bash
