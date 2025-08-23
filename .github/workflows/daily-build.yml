@@ -74,7 +74,7 @@ jobs:
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: mpv-package-${{ steps.date.outputs.DATE }}
+        name: fntv-mpv-config-${{ steps.date.outputs.DATE }}
         path: output/
         retention-days: 30
     
@@ -83,30 +83,49 @@ jobs:
       id: create_release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: daily-${{ steps.date.outputs.DATE }}
-        name: Daily Build ${{ steps.date.outputs.DATE }}
+        tag_name: fntv-mpv-v${{ steps.date.outputs.DATE }}
+        name: FNTV MPV Config v${{ steps.date.outputs.DATE }}
         body: |
-          🎬 自动构建的MPV配置包
+          🎬 FNTV MPV 配置管理工具 - 自动构建包
           
           📅 构建时间: ${{ steps.date.outputs.DATE }}
           🔧 构建分支: ${{ github.ref_name }}
           📝 提交ID: ${{ github.sha }}
+          🎯 项目版本: v1.0.0
           
-          📦 包含内容:
-          - MPV播放器 (最新版本)
-          - uosc插件 (现代化UI)
-          - uosc_danmaku插件 (弹幕支持)
-          - 预配置的快捷键和设置
+          📦 本次构建包含:
+          - 🎥 MPV 播放器
+          - 🎨 MPV插件
+          - ⚙️ 预配置的快捷键和播放设置
+          - 🔧 便携式配置文件结构
           
-          ## 🚀 使用方法
-          1. 下载并解压 `mpv-package-*.zip` 文件
-          2. 运行 `mpv.exe` 开始使用
-          3. 配置文件位于 `portable_config/` 目录
+          ## 🚀 快速开始
+          1. 下载 `mpv-package-*.zip` 文件
+          2. 解压到任意目录
+          3. 双击运行 `mpv.exe` 即可使用
+          4. 所有配置都是便携式的，无需安装
           
-          ## ⚙️ 配置说明
-          - 快捷键配置: `portable_config/input.conf`
-          - 插件配置: `portable_config/script-opts/`
-          - 自定义脚本: `portable_config/scripts/`
+          ## 📁 目录结构
+          ```
+          fntv-mpv-config/
+          ├── mpv.exe                    # MPV播放器主程序
+          ├── portable_config/           # 便携式配置目录
+          │   ├── input.conf            # 快捷键配置
+          │   ├── scripts/              # 插件脚本
+          │   ├── script-opts/          # 插件配置
+          │   └── fonts/                # 字体文件
+          └── d3dcompiler_43.dll        # 依赖库
+          ```
+          
+          ## ⚙️ 配置管理
+          - 🎮 快捷键: `portable_config/input.conf`
+          - 🎨 UI设置: `portable_config/script-opts/uosc.conf`
+          - 💬 弹幕设置: `portable_config/script-opts/uosc_danmaku.conf`
+          
+          ## 🔗 相关链接
+          - 📖 [使用文档](https://github.com/QiaoKes/fntv-mpv-config/blob/release/README.md)
+          - 🐛 [问题反馈](https://github.com/QiaoKes/fntv-mpv-config/issues)
+          - 🔄 [配置更新](https://github.com/QiaoKes/fntv-mpv-config/releases)
         files: output/*.zip
         draft: false
         prerelease: false
