@@ -84,9 +84,9 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: fntv-mpv-v${{ steps.date.outputs.DATE }}
-        name: FNTV MPV Config v${{ steps.date.outputs.DATE }}
+        name: FNTV MPV v${{ steps.date.outputs.DATE }}
         body: |
-          🎬 FNTV MPV 配置管理工具 - 自动构建包
+          🎬 FNTV MPV - 自动构建包
           
           📅 构建时间: ${{ steps.date.outputs.DATE }}
           🔧 构建分支: ${{ github.ref_name }}
@@ -94,7 +94,7 @@ jobs:
           🎯 项目版本: v1.0.0
           
           📦 本次构建包含:
-          - 🎥 MPV 播放器
+          - 🎥 MPV播放器
           - 🎨 MPV插件
           - ⚙️ 预配置的快捷键和播放设置
           - 🔧 便携式配置文件结构
