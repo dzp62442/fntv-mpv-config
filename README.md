@@ -109,6 +109,11 @@ python run.py --skip-download
 
 # 只下载，不安装
 python run.py --skip-install
+
+# 清理下载和构建目录
+python run.py --clean temp      # 清理临时下载文件
+python run.py --clean output    # 清理构建的安装包
+python run.py --clean all       # 清理所有临时文件和构建产物
 ```
 
 ## 配置文件详解

@@ -25,6 +25,15 @@ jobs:
       with:
         python-version: '3.11'
     
+    - name: Install 7-Zip
+      run: |
+        # 安装7-Zip
+        choco install 7zip -y
+        # 验证安装
+        7z --help
+        # 或者使用winget
+        # winget install --id 7zip.7zip --silent --accept-package-agreements --accept-source-agreements
+    
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -37,7 +46,7 @@ jobs:
     
     - name: Run MPV config build
       run: |
-        python -m src.main --log-level INFO
+        python run.py --log-level INFO
       env:
         # 如果需要访问私有仓库，可以设置GitHub token
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -60,14 +69,15 @@ jobs:
         path: output/
         retention-days: 30
     
-    - name: Create Release (if on main branch)
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: actions/create-release@v1
+    - name: Create Release (if on release branch)
+      if: github.ref == 'refs/heads/release' || github.ref == 'refs/heads/master'
+      id: create_release
+      uses: softprops/action-gh-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: daily-${{ steps.date.outputs.DATE }}
-        release_name: Daily Build ${{ steps.date.outputs.DATE }}
+        name: Daily Build ${{ steps.date.outputs.DATE }}
         body: |
           自动构建的MPV配置包
           
@@ -75,27 +85,15 @@ jobs:
           
           包含内容:
           - MPV播放器
-          - uosc插件
-          - uosc_danmaku插件
-          - 自定义配置文件
+          - MPV插件
           
           ## 使用方法
           1. 下载并解压包文件
           2. 直接运行MPV播放器
           3. 享受预配置的播放体验
+        files: output/*.zip
         draft: false
         prerelease: false
-    
-    - name: Upload Release Asset
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: output/mpv-package-*.zip
-        asset_name: mpv-package-${{ steps.date.outputs.DATE }}.zip
-        asset_content_type: application/zip
     
     - name: Cleanup
       if: always()

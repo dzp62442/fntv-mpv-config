@@ -199,6 +199,43 @@ class MPVConfigManager:
                 self.logger.error(f"依赖项不存在: {name}")
         except Exception as e:
             self.logger.error(f"禁用依赖项失败: {e}")
+    
+    def clean_directories(self, clean_temp: bool = True, clean_output: bool = False):
+        """
+        清理下载和构建目录
+        
+        Args:
+            clean_temp: 是否清理临时目录（下载的文件和解压的内容）
+            clean_output: 是否清理输出目录（构建的安装包）
+        """
+        import shutil
+        
+        try:
+            if clean_temp:
+                temp_dir = self.config_manager.get_temp_dir()
+                if temp_dir.exists():
+                    shutil.rmtree(temp_dir)
+                    self.logger.info(f"已清理临时目录: {temp_dir}")
+                else:
+                    self.logger.info(f"临时目录不存在: {temp_dir}")
+            
+            if clean_output:
+                output_dir = self.config_manager.get_output_dir()
+                if output_dir.exists():
+                    # 只删除output目录中的文件，不删除目录本身
+                    for item in output_dir.iterdir():
+                        if item.is_file():
+                            item.unlink()
+                            self.logger.info(f"已删除文件: {item.name}")
+                        elif item.is_dir():
+                            shutil.rmtree(item)
+                            self.logger.info(f"已删除目录: {item.name}")
+                    self.logger.info(f"已清理输出目录: {output_dir}")
+                else:
+                    self.logger.info(f"输出目录不存在: {output_dir}")
+                    
+        except Exception as e:
+            self.logger.error(f"清理目录失败: {e}")
 
 
 def create_cli_parser() -> argparse.ArgumentParser:
@@ -215,6 +252,9 @@ def create_cli_parser() -> argparse.ArgumentParser:
   python -m src.main --disable uosc_danmaku   # 禁用指定依赖项
   python -m src.main --skip-download          # 跳过下载，直接安装
   python -m src.main --skip-install           # 只下载，不安装
+  python -m src.main --clean temp             # 清理临时下载文件
+  python -m src.main --clean output           # 清理构建的安装包
+  python -m src.main --clean all              # 清理所有临时文件和构建产物
         """
     )
     
@@ -273,6 +313,12 @@ def create_cli_parser() -> argparse.ArgumentParser:
         help='禁用指定的依赖项'
     )
     
+    parser.add_argument(
+        '--clean',
+        choices=['temp', 'output', 'all'],
+        help='清理目录 (temp: 临时文件, output: 构建产物, all: 全部)'
+    )
+    
     # 日志选项
     parser.add_argument(
         '--log-level',
@@ -300,6 +346,14 @@ def main():
             manager.enable_dependency(args.enable)
         elif args.disable:
             manager.disable_dependency(args.disable)
+        elif args.clean:
+            # 处理清理命令
+            if args.clean == 'temp':
+                manager.clean_directories(clean_temp=True, clean_output=False)
+            elif args.clean == 'output':
+                manager.clean_directories(clean_temp=False, clean_output=True)
+            elif args.clean == 'all':
+                manager.clean_directories(clean_temp=True, clean_output=True)
         else:
             # 执行主流程
             success = manager.run(

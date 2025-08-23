@@ -8,6 +8,7 @@ import requests
 from typing import Optional, List, Dict, Any
 from pathlib import Path
 import logging
+from tqdm import tqdm
 
 
 class DownloadError(Exception):
@@ -204,18 +205,34 @@ class DownloadManager:
         response.raise_for_status()
         
         total_size = int(response.headers.get('content-length', 0))
-        downloaded_size = 0
         
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded_size += len(chunk)
-                    
-                    # 显示进度
-                    if total_size > 0:
-                        progress = (downloaded_size / total_size) * 100
-                        self.logger.info(f"下载进度: {progress:.1f}%")
+        # 创建进度条
+        # 在CI环境中使用简化的进度条配置
+        progress_bar = tqdm(
+            total=total_size,
+            unit='B',
+            unit_scale=True,
+            unit_divisor=1024,
+            desc=file_path.name,
+            disable=total_size == 0,  # 如果无法获取总大小，禁用进度条
+            ascii=True,  # 在CI环境中使用ASCII字符
+            ncols=80,  # 限制宽度，避免在CI中显示异常
+        )
+        
+        try:
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        progress_bar.update(len(chunk))
+        finally:
+            progress_bar.close()
+        
+        # 下载完成后记录日志
+        if total_size > 0:
+            self.logger.info(f"下载完成: {file_path.name} ({total_size / 1024 / 1024:.1f} MB)")
+        else:
+            self.logger.info(f"下载完成: {file_path.name}")
     
     def cleanup(self):
         """清理临时文件"""
