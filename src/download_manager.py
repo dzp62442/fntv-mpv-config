@@ -123,23 +123,11 @@ class DownloadManager:
         
         # 根据具体的仓库构建准确的文件名
         if owner == "shinchiro" and repo == "mpv-winbuild-cmake":
-            # MPV的实际文件名
-            filename = f"mpv-dev-x86_64-{version}-git-194ce88.7z"
-        elif owner == "tomasklaen" and repo == "uosc":
-            # UOSC的文件名
-            filename = f"uosc.zip"
-        elif owner == "Tony15246" and repo == "uosc_danmaku":
-            # uosc_danmaku的文件名
-            filename = f"uosc_danmaku.zip"
+            # MPV的文件名需要从GitHub API获取实际的文件名
+            filename = self._get_github_asset_filename(owner, repo, version, filename_pattern, file_format)
         else:
-            # 通用处理
-            if '{version}' in filename_pattern:
-                filename = filename_pattern.format(version=version)
-            else:
-                filename = filename_pattern
-            
-            if not filename.endswith(f'.{file_format}'):
-                filename = f"{filename}.{file_format}"
+            # 通用处理：尝试从GitHub API获取匹配的文件名
+            filename = self._get_github_asset_filename(owner, repo, version, filename_pattern, file_format)
         
         # 构建直接下载链接
         download_url = f"https://github.com/{owner}/{repo}/releases/download/{version}/{filename}"
@@ -150,6 +138,81 @@ class DownloadManager:
         
         self.logger.info(f"构建的下载链接: {download_url}")
         return download_url
+    
+    def _get_github_asset_filename(self, owner: str, repo: str, version: str, filename_pattern: str, file_format: str) -> str:
+        """
+        动态获取GitHub Release中匹配的文件名
+        
+        Args:
+            owner: 仓库所有者
+            repo: 仓库名
+            version: 版本号
+            filename_pattern: 文件名模式
+            file_format: 文件格式
+            
+        Returns:
+            实际的文件名
+        """
+        try:
+            # 构建GitHub API URL来获取release信息
+            api_url = f"https://api.github.com/repos/{owner}/{repo}/releases/tags/{version}"
+            
+            # 如果启用代理，需要直接访问API而不通过代理
+            response = requests.get(api_url, timeout=10)
+            response.raise_for_status()
+            
+            release_info = response.json()
+            assets = release_info.get('assets', [])
+            
+            # 基于filename_pattern查找匹配的文件
+            if '{version}' in filename_pattern:
+                pattern_base = filename_pattern.format(version=version)
+            else:
+                pattern_base = filename_pattern
+            
+            # 策略1: 精确匹配完整文件名（包含扩展名）
+            target_filename = f"{pattern_base}.{file_format}"
+            for asset in assets:
+                if asset['name'] == target_filename:
+                    self.logger.info(f"找到精确匹配的文件: {asset['name']}")
+                    return asset['name']
+            
+            # 策略2: 匹配模式开头且格式正确的文件
+            for asset in assets:
+                asset_name = asset['name']
+                if asset_name.startswith(pattern_base) and asset_name.endswith(f'.{file_format}'):
+                    self.logger.info(f"找到模式匹配的文件: {asset_name}")
+                    return asset_name
+            
+            # 策略3: 更宽松的匹配 - 检查是否包含主要关键词
+            pattern_keywords = pattern_base.replace('-', ' ').replace('_', ' ').split()
+            for asset in assets:
+                asset_name = asset['name']
+                if asset_name.endswith(f'.{file_format}'):
+                    # 检查是否包含所有关键词
+                    asset_lower = asset_name.lower()
+                    if all(keyword.lower() in asset_lower for keyword in pattern_keywords if keyword):
+                        self.logger.info(f"找到关键词匹配的文件: {asset_name}")
+                        return asset_name
+            
+            # 策略4: 如果只有一个匹配格式的文件，就使用它
+            matching_format_assets = [asset for asset in assets if asset['name'].endswith(f'.{file_format}')]
+            if len(matching_format_assets) == 1:
+                self.logger.info(f"找到唯一格式匹配的文件: {matching_format_assets[0]['name']}")
+                return matching_format_assets[0]['name']
+            
+            # 如果都没找到，使用默认命名
+            self.logger.warning(f"未找到匹配的文件，使用默认命名: {target_filename}")
+            return target_filename
+            
+        except Exception as e:
+            self.logger.warning(f"获取GitHub文件名失败: {e}，使用默认命名")
+            # 降级到基本命名
+            if '{version}' in filename_pattern:
+                base_name = filename_pattern.format(version=version)
+            else:
+                base_name = filename_pattern
+            return f"{base_name}.{file_format}"
     
     def _get_filename(self, config: Dict[str, Any], download_url: str) -> str:
         """
@@ -207,7 +270,7 @@ class DownloadManager:
         total_size = int(response.headers.get('content-length', 0))
         
         # 创建进度条
-        # 在CI环境中使用简化的进度条配置
+        # 优化进度条显示，增强兼容性
         progress_bar = tqdm(
             total=total_size,
             unit='B',
@@ -215,8 +278,9 @@ class DownloadManager:
             unit_divisor=1024,
             desc=file_path.name,
             disable=total_size == 0,  # 如果无法获取总大小，禁用进度条
-            ascii=True,  # 在CI环境中使用ASCII字符
-            ncols=80,  # 限制宽度，避免在CI中显示异常
+            ascii=False,  # 使用Unicode字符以更好显示
+            ncols=100,  # 增加宽度以更好显示
+            bar_format='{desc}: {percentage:3.0f}%|{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
         )
         
         try:

@@ -15,22 +15,14 @@
             "enabled": true,
             "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
             "version": "20250823",
-            "filename_pattern": "mpv-dev-x86_64-{version}",
+            "filename_pattern": "mpv-x86_64-{version}",
             "format": "7z",
             "install_rules": [
                 {
                     "from": "",
                     "to": "",
                     "filter": [
-                        "mpv.exe",
-                        "mpv.com"
-                    ]
-                },
-                {
-                    "from": "doc",
-                    "to": "doc",
-                    "filter": [
-                        "**/*"
+                       "**/*"
                     ]
                 }
             ]
@@ -45,14 +37,14 @@
             "install_rules": [
                 {
                     "from": "scripts",
-                    "to": "scripts",
+                    "to": "portable_config/scripts",
                     "filter": [
-                        "**/*.lua"
+                        "**/*"
                     ]
                 },
                 {
                     "from": "fonts",
-                    "to": "fonts",
+                    "to": "portable_config/fonts",
                     "filter": [
                         "**/*"
                     ]
@@ -68,10 +60,10 @@
             "format": "zip",
             "install_rules": [
                 {
-                    "from": "scripts",
-                    "to": "scripts",
+                    "from": "",
+                    "to": "portable_config/scripts/uosc_danmaku",
                     "filter": [
-                        "**/*.lua"
+                        "**/*"
                     ]
                 }
             ]

@@ -4,7 +4,7 @@
 """
 import shutil
 import fnmatch
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 import logging
 
@@ -17,31 +17,36 @@ class InstallError(Exception):
 class InstallManager:
     """安装管理器"""
     
-    def __init__(self, output_dir: Path, custom_config_dir: Path):
+    def __init__(self, output_dir: Path, custom_config_dir: Path, project_name: str):
         """
         初始化安装管理器
         
         Args:
             output_dir: 输出目录
             custom_config_dir: 自定义配置目录
+            project_name: 项目名称，用于创建子目录
         """
-        self.output_dir = Path(output_dir)
+        self.base_output_dir = Path(output_dir)
+        self.output_dir = self.base_output_dir / project_name  # 在输出目录下创建项目子目录
         self.custom_config_dir = Path(custom_config_dir)
+        self.project_name = project_name
         self.logger = logging.getLogger(__name__)
+        self.common_config_installed = False  # 标记是否已安装通用配置
         
         # 创建输出目录
+        self.base_output_dir.mkdir(parents=True, exist_ok=True)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.portable_config_dir = self.output_dir / "portable_config"
         self.portable_config_dir.mkdir(parents=True, exist_ok=True)
     
-    def install_dependency(self, name: str, config: Dict[str, Any], extracted_path: Path):
+    def install_dependency(self, name: str, config: Dict[str, Any], extracted_path: Optional[Path] = None):
         """
         安装依赖项
         
         Args:
             name: 依赖项名称
             config: 依赖项配置
-            extracted_path: 解压后的路径
+            extracted_path: 解压后的路径，可以为None（仅安装自定义配置）
         """
         self.logger.info(f"开始安装 {name}")
         
@@ -49,13 +54,14 @@ class InstallManager:
             # 获取安装规则
             install_rules = config.get('install_rules', [])
             
-            if not install_rules:
-                self.logger.warning(f"{name} 没有定义安装规则，跳过安装")
-                return
-            
-            # 根据规则复制文件
-            for rule in install_rules:
-                self._apply_install_rule(name, rule, extracted_path)
+            if extracted_path and install_rules:
+                # 根据规则复制文件
+                for rule in install_rules:
+                    self._apply_install_rule(name, rule, extracted_path)
+            elif not extracted_path:
+                self.logger.info(f"{name} 没有解压内容，仅安装自定义配置")
+            else:
+                self.logger.warning(f"{name} 没有定义安装规则，跳过文件安装")
             
             # 安装自定义配置
             self._install_custom_config(name)
@@ -80,7 +86,20 @@ class InstallManager:
         
         # 构建完整路径
         source_path = source_base / source_rel if source_rel else source_base
-        target_path = self.portable_config_dir / target_rel if target_rel else self.portable_config_dir
+        
+        # 根据目标路径决定是放在根目录还是portable_config目录
+        if target_rel.startswith('portable_config/'):
+            # 如果目标路径明确指定了portable_config，则使用指定的路径
+            target_path = self.output_dir / target_rel
+        elif target_rel == '' or target_rel == '.':
+            # 如果目标是空或当前目录，则放在输出根目录
+            target_path = self.output_dir
+        elif target_rel == 'mpv':
+            # mpv子目录应该放在根目录下
+            target_path = self.output_dir / target_rel
+        else:
+            # 其他情况默认放在portable_config目录下
+            target_path = self.portable_config_dir / target_rel
         
         self.logger.debug(f"应用规则: {source_path} -> {target_path}")
         
@@ -186,25 +205,57 @@ class InstallManager:
         Args:
             name: 依赖项名称
         """
+        # 检查通用自定义配置目录
         custom_dir = self.custom_config_dir / name
         
-        if not custom_dir.exists():
-            self.logger.debug(f"没有找到 {name} 的自定义配置目录: {custom_dir}")
-            return
+        if custom_dir.exists():
+            self.logger.info(f"安装 {name} 的自定义配置")
+            
+            try:
+                # 递归复制自定义配置到portable_config
+                for item in custom_dir.rglob('*'):
+                    if item.is_file():
+                        rel_path = item.relative_to(custom_dir)
+                        target_file = self.portable_config_dir / rel_path
+                        self._copy_file(item, target_file)
+            
+            except Exception as e:
+                self.logger.error(f"安装 {name} 自定义配置失败: {e}")
+                raise
         
-        self.logger.info(f"安装 {name} 的自定义配置")
+        # 只在第一次调用时安装通用配置文件
+        if not self.common_config_installed:
+            self._install_common_config()
+            self.common_config_installed = True
+    
+    def _install_common_config(self):
+        """
+        安装通用配置文件
+        """
+        self.logger.info("安装通用配置文件")
         
-        try:
-            # 递归复制自定义配置到portable_config
-            for item in custom_dir.rglob('*'):
-                if item.is_file():
-                    rel_path = item.relative_to(custom_dir)
-                    target_file = self.portable_config_dir / rel_path
-                    self._copy_file(item, target_file)
+        # 安装根目录级别的自定义配置
+        root_custom_files = [
+            'danmaku-history.json',
+            'settings.xml'
+        ]
         
-        except Exception as e:
-            self.logger.error(f"安装 {name} 自定义配置失败: {e}")
-            raise
+        for filename in root_custom_files:
+            custom_file = self.custom_config_dir / filename
+            if custom_file.exists():
+                target_file = self.portable_config_dir / filename
+                self._copy_file(custom_file, target_file)
+                self.logger.debug(f"已复制通用配置: {filename}")
+        
+        # 检查并创建script-opts配置文件
+        script_opts_dir = self.portable_config_dir / 'script-opts'
+        script_opts_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 复制uosc_danmaku配置
+        uosc_danmaku_conf = self.custom_config_dir / 'uosc_danmaku.conf'
+        if uosc_danmaku_conf.exists():
+            target_conf = script_opts_dir / 'uosc_danmaku.conf'
+            self._copy_file(uosc_danmaku_conf, target_conf)
     
     def create_package(self) -> Path:
         """
@@ -216,7 +267,8 @@ class InstallManager:
         self.logger.info("创建安装包")
         
         package_name = f"mpv-package-{self._get_timestamp()}"
-        package_path = self.output_dir / f"{package_name}.zip"
+        # 打包文件放在根输出目录，而不是项目子目录
+        package_path = self.base_output_dir / f"{package_name}.zip"
         
         try:
             import zipfile
@@ -224,7 +276,7 @@ class InstallManager:
             with zipfile.ZipFile(package_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
                 # 添加所有文件到压缩包
                 for file_path in self.output_dir.rglob('*'):
-                    if file_path.is_file() and file_path != package_path:
+                    if file_path.is_file():
                         arcname = file_path.relative_to(self.output_dir)
                         zipf.write(file_path, arcname)
             

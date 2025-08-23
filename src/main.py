@@ -81,10 +81,26 @@ class MPVConfigManager:
                         extracted_path = self.extract_manager.extract_archive(downloaded_file)
                         content_path = self.extract_manager.find_extracted_content(extracted_path)
                         extracted_paths[dep_name] = content_path
+                    elif skip_download:
+                        # 如果跳过下载，尝试在temp目录中查找已解压的内容
+                        temp_dir = self.config_manager.get_temp_dir()
+                        possible_paths = [
+                            temp_dir / f"{dep_name}_extracted",
+                            temp_dir / dep_name,
+                            temp_dir / f"extracted_{dep_name}"
+                        ]
+                        for path in possible_paths:
+                            if path.exists():
+                                extracted_paths[dep_name] = path
+                                self.logger.info(f"找到 {dep_name} 的解压内容: {path}")
+                                break
+                        else:
+                            self.logger.warning(f"跳过下载模式下未找到 {dep_name} 的解压内容，将仅安装自定义配置")
                     
-                    if not skip_install and dep_name in extracted_paths and self.install_manager:
-                        # 安装
-                        self.install_manager.install_dependency(dep_name, dep_config, extracted_paths[dep_name])
+                    if not skip_install and self.install_manager:
+                        # 安装（如果没有解压内容，仅安装自定义配置）
+                        content_path = extracted_paths.get(dep_name, None)
+                        self.install_manager.install_dependency(dep_name, dep_config, content_path)
                 
                 except Exception as e:
                     self.logger.error(f"处理依赖项 {dep_name} 失败: {e}")
@@ -117,9 +133,12 @@ class MPVConfigManager:
         proxy_url = self.config_manager.get_github_proxy()
         enable_proxy = self.config_manager.is_proxy_enabled()
         
+        # 获取项目名称用于创建子目录
+        project_name = self.config_manager.get_project_name()
+        
         self.download_manager = DownloadManager(temp_dir, proxy_url, enable_proxy)
         self.extract_manager = ExtractManager(temp_dir)
-        self.install_manager = InstallManager(output_dir, custom_config_dir)
+        self.install_manager = InstallManager(output_dir, custom_config_dir, project_name)
     
     def _get_target_dependencies(self, dependencies: Optional[List[str]]) -> dict:
         """

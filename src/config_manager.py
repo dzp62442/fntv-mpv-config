@@ -75,6 +75,10 @@ class ConfigManager:
         """获取自定义配置目录"""
         return Path(self.get_config()['config']['custom_config_dir'])
     
+    def get_project_name(self) -> str:
+        """获取项目名称"""
+        return self.get_config()['name']
+    
     def get_github_proxy(self) -> str:
         """获取GitHub代理地址"""
         config = self.get_config()['config']
