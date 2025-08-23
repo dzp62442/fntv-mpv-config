@@ -16,6 +16,12 @@ jobs:
   build:
     runs-on: windows-latest
     
+    # 为GITHUB_TOKEN添加必要权限
+    permissions:
+      contents: write        # 需要写入权限来创建release
+      actions: read         # 读取actions权限
+      checks: read          # 读取checks权限
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -73,27 +79,35 @@ jobs:
       if: github.ref == 'refs/heads/release' || github.ref == 'refs/heads/master'
       id: create_release
       uses: softprops/action-gh-release@v2
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: daily-${{ steps.date.outputs.DATE }}
         name: Daily Build ${{ steps.date.outputs.DATE }}
         body: |
-          自动构建的MPV配置包
+          🎬 自动构建的MPV配置包
           
-          构建时间: ${{ steps.date.outputs.DATE }}
+          📅 构建时间: ${{ steps.date.outputs.DATE }}
+          🔧 构建分支: ${{ github.ref_name }}
+          📝 提交ID: ${{ github.sha }}
           
-          包含内容:
-          - MPV播放器
-          - MPV插件
+          📦 包含内容:
+          - MPV播放器 (最新版本)
+          - uosc插件 (现代化UI)
+          - uosc_danmaku插件 (弹幕支持)
+          - 预配置的快捷键和设置
           
-          ## 使用方法
-          1. 下载并解压包文件
-          2. 直接运行MPV播放器
-          3. 享受预配置的播放体验
+          ## 🚀 使用方法
+          1. 下载并解压 `mpv-package-*.zip` 文件
+          2. 运行 `mpv.exe` 开始使用
+          3. 配置文件位于 `portable_config/` 目录
+          
+          ## ⚙️ 配置说明
+          - 快捷键配置: `portable_config/input.conf`
+          - 插件配置: `portable_config/script-opts/`
+          - 自定义脚本: `portable_config/scripts/`
         files: output/*.zip
         draft: false
         prerelease: false
+        token: ${{ secrets.GITHUB_TOKEN }}
     
     - name: Cleanup
       if: always()
