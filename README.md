@@ -112,11 +112,98 @@ python run.py --skip-download
 # 只下载，不安装
 python run.py --skip-install
 
+# 使用本地包文件
+python run.py --deps local_plugin  # 配置文件中指定了local_path的依赖项
+
 # 清理下载和构建目录
 python run.py --clean temp      # 清理临时下载文件
 python run.py --clean output    # 清理构建的安装包
 python run.py --clean all       # 清理所有临时文件和构建产物
 ```
+
+## 本地包支持
+
+除了从网络下载，现在也支持安装本地文件包和文件夹：
+
+### 配置方式
+
+#### 方式1：使用 local_path 字段（压缩文件）
+```json
+{
+  "my_local_plugin": {
+    "name": "本地插件",
+    "enabled": true,
+    "local_path": "./local_packages/plugin.zip",
+    "version": "local",
+    "format": "zip",
+    "exclude_files": ["*.md", "LICENSE*"],
+    "custom_install_rules": [
+      {
+        "from": "scripts",
+        "to": "portable_config/scripts",
+        "filter": ["**/*"]
+      }
+    ]
+  }
+}
+```
+
+#### 方式2：使用 local_path 字段（文件夹）
+```json
+{
+  "my_folder_plugin": {
+    "name": "本地文件夹插件",
+    "enabled": true,
+    "local_path": "./local_packages/extracted_plugin",
+    "version": "folder",
+    "exclude_files": ["*.md", "test/**"],
+    "custom_install_rules": [
+      {
+        "from": "src",
+        "to": "portable_config/scripts/my_plugin",
+        "filter": ["**/*.lua"],
+        "exclude": ["**/debug/**"]
+      }
+    ]
+  }
+}
+```
+
+#### 方式3：将 url 设置为本地路径
+```json
+{
+  "my_local_mpv": {
+    "name": "本地MPV",
+    "enabled": true,
+    "url": "./local_packages/mpv-local.7z",
+    "version": "local",
+    "filename_pattern": "mpv-local",
+    "format": "7z"
+  }
+}
+```
+
+### 支持格式
+- **压缩文件**：zip、7z、rar、tar、tar.gz、tar.bz2等所有支持的格式
+- **文件夹**：已解压的目录结构，系统会自动检测并跳过解压步骤
+
+### 路径规则
+- **相对路径**：相对于项目根目录，如 `./local_packages/file.zip` 或 `./local_packages/folder`
+- **绝对路径**：完整路径，如 `C:/packages/file.zip` 或 `C:/packages/folder`
+
+### 使用场景
+- 🧪 **测试开发**：测试新插件而不需要上传到GitHub
+- 📦 **离线环境**：在没有网络的环境中安装
+- 🔧 **自定义包**：安装修改过的插件版本
+- 🚀 **快速部署**：跳过下载和解压时间（文件夹方式）
+- 🔄 **增量开发**：直接使用开发目录进行测试
+
+### 注意事项
+- 支持所有网络下载支持的格式（zip、7z、rar等）
+- 文件夹方式支持直接指向已解压的目录
+- 安装规则（exclude_files、custom_install_rules）完全相同
+- 本地文件会被复制到临时目录，保持一致的处理流程
+- 文件夹方式会自动跳过解压步骤，提高处理效率
 
 ## 配置文件详解
 

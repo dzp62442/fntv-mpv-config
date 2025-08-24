@@ -74,12 +74,19 @@ class MPVConfigManager:
             for dep_name, dep_config in target_dependencies.items():
                 try:
                     if not skip_download and self.download_manager and self.extract_manager:
-                        # 下载
+                        # 下载（或处理本地文件/文件夹）
                         downloaded_file = self.download_manager.download_dependency(dep_name, dep_config)
                         
-                        # 解压
-                        extracted_path = self.extract_manager.extract_archive(downloaded_file)
-                        content_path = self.extract_manager.find_extracted_content(extracted_path)
+                        # 检查是否为已解压的文件夹（文件名以_extracted结尾）
+                        if downloaded_file.name.endswith('_extracted') and downloaded_file.is_dir():
+                            # 本地文件夹，直接使用，跳过解压
+                            self.logger.info(f"{dep_name} 使用本地文件夹，跳过解压")
+                            content_path = downloaded_file
+                        else:
+                            # 压缩包文件，需要解压
+                            extracted_path = self.extract_manager.extract_archive(downloaded_file)
+                            content_path = self.extract_manager.find_extracted_content(extracted_path)
+                        
                         extracted_paths[dep_name] = content_path
                     elif skip_download:
                         # 如果跳过下载，尝试在temp目录中查找已解压的内容

@@ -39,7 +39,7 @@ class DownloadManager:
     
     def download_dependency(self, name: str, config: Dict[str, Any]) -> Path:
         """
-        下载依赖项
+        下载依赖项，支持网络下载和本地文件
         
         Args:
             name: 依赖项名称
@@ -51,32 +51,264 @@ class DownloadManager:
         Raises:
             DownloadError: 下载失败
         """
-        self.logger.info(f"开始下载 {name}")
+        self.logger.info(f"开始处理 {name}")
         
         try:
-            # 获取下载URL
-            download_url = self._get_download_url(config)
-            if not download_url:
-                raise DownloadError(f"无法获取 {name} 的下载链接")
+            # 检查是否为本地文件
+            if self._is_local_file(config):
+                return self._handle_local_file(name, config)
             
-            # 确定文件名
-            filename = self._get_filename(config, download_url)
-            file_path = self.temp_dir / filename
-            
-            # 如果文件已存在且大小正确，跳过下载
-            if file_path.exists() and self._verify_file(file_path, download_url):
-                self.logger.info(f"{name} 文件已存在，跳过下载")
-                return file_path
-            
-            # 下载文件
-            self.logger.info(f"从 {download_url} 下载到 {file_path}")
-            self._download_file(download_url, file_path)
-            
-            self.logger.info(f"{name} 下载完成")
-            return file_path
+            # 网络下载逻辑
+            return self._handle_network_download(name, config)
             
         except Exception as e:
-            raise DownloadError(f"下载 {name} 失败: {e}")
+            raise DownloadError(f"处理 {name} 失败: {e}")
+    
+    def _is_local_file(self, config: Dict[str, Any]) -> bool:
+        """
+        检查配置是否指向本地文件
+        
+        Args:
+            config: 依赖项配置
+            
+        Returns:
+            是否为本地文件
+        """
+        url = config.get('url', '')
+        local_path = config.get('local_path', '')
+        
+        # 如果配置了 local_path，或者 url 是本地路径
+        return bool(local_path) or (url and not url.startswith(('http://', 'https://')))
+    
+    def _handle_local_file(self, name: str, config: Dict[str, Any]) -> Path:
+        """
+        处理本地文件或文件夹
+        
+        Args:
+            name: 依赖项名称
+            config: 依赖项配置
+            
+        Returns:
+            本地文件的路径或解压目录的路径（如果是文件夹）
+        """
+        # 优先使用 local_path，否则使用 url
+        local_path_str = config.get('local_path') or config.get('url', '')
+        
+        if not local_path_str:
+            raise DownloadError(f"{name} 没有指定本地文件路径")
+        
+        local_path = Path(local_path_str)
+        
+        # 如果是相对路径，相对于项目根目录
+        if not local_path.is_absolute():
+            # 获取项目根目录（假设临时目录在项目根目录下）
+            project_root = self.temp_dir.parent
+            local_path = project_root / local_path
+        
+        # 检查路径是否存在
+        if not local_path.exists():
+            raise DownloadError(f"本地路径不存在: {local_path}")
+        
+        if local_path.is_file():
+            # 处理压缩包文件
+            return self._handle_local_archive(name, local_path, config)
+        elif local_path.is_dir():
+            # 处理已解压的文件夹
+            return self._handle_local_directory(name, local_path, config)
+        else:
+            raise DownloadError(f"不支持的本地路径类型: {local_path}")
+    
+    def _handle_local_archive(self, name: str, local_path: Path, config: Dict[str, Any]) -> Path:
+        """
+        处理本地压缩包文件
+        
+        Args:
+            name: 依赖项名称
+            local_path: 本地压缩包路径
+            config: 依赖项配置
+            
+        Returns:
+            复制到临时目录的压缩包路径
+        """
+        self.logger.info(f"使用本地压缩包: {local_path}")
+        
+        # 为了保持与网络下载的一致性，将文件复制到临时目录
+        target_filename = self._get_filename_from_local_path(local_path, config)
+        target_path = self.temp_dir / target_filename
+        
+        # 如果目标文件已存在且内容相同，跳过复制
+        if target_path.exists() and self._files_are_same(local_path, target_path):
+            self.logger.info(f"{name} 本地压缩包已存在于临时目录，跳过复制")
+            return target_path
+        
+        # 复制文件到临时目录
+        import shutil
+        shutil.copy2(local_path, target_path)
+        self.logger.info(f"已复制本地压缩包到: {target_path}")
+        
+        return target_path
+    
+    def _handle_local_directory(self, name: str, local_path: Path, config: Dict[str, Any]) -> Path:
+        """
+        处理本地已解压的文件夹
+        
+        Args:
+            name: 依赖项名称
+            local_path: 本地文件夹路径
+            config: 依赖项配置
+            
+        Returns:
+            复制到临时目录的文件夹路径
+        """
+        self.logger.info(f"使用本地文件夹: {local_path}")
+        
+        # 为已解压文件夹创建目标目录名
+        target_dirname = self._get_directory_name_from_config(name, config)
+        target_path = self.temp_dir / f"{target_dirname}_extracted"
+        
+        # 如果目标目录已存在，检查是否需要更新
+        if target_path.exists():
+            if self._directory_is_newer(local_path, target_path):
+                self.logger.info(f"本地文件夹有更新，重新复制到: {target_path}")
+                import shutil
+                shutil.rmtree(target_path)
+            else:
+                self.logger.info(f"{name} 本地文件夹已存在于临时目录，跳过复制")
+                return target_path
+        
+        # 复制整个文件夹到临时目录
+        import shutil
+        shutil.copytree(local_path, target_path)
+        self.logger.info(f"已复制本地文件夹到: {target_path}")
+        
+        return target_path
+    
+    def _get_directory_name_from_config(self, name: str, config: Dict[str, Any]) -> str:
+        """
+        从配置获取目录名
+        
+        Args:
+            name: 依赖项名称
+            config: 依赖项配置
+            
+        Returns:
+            目录名
+        """
+        # 如果配置中指定了文件名模式，使用它
+        if 'filename_pattern' in config:
+            version = config.get('version', 'local')
+            pattern = config['filename_pattern']
+            # 替换版本占位符
+            return pattern.format(version=version)
+        
+        # 否则使用依赖项名称
+        return name
+    
+    def _directory_is_newer(self, source_dir: Path, target_dir: Path) -> bool:
+        """
+        检查源目录是否比目标目录更新
+        
+        Args:
+            source_dir: 源目录
+            target_dir: 目标目录
+            
+        Returns:
+            源目录是否更新
+        """
+        try:
+            # 简单比较：获取源目录中最新文件的修改时间
+            source_latest = max(
+                (f.stat().st_mtime for f in source_dir.rglob('*') if f.is_file()),
+                default=0
+            )
+            
+            # 获取目标目录的创建时间
+            target_created = target_dir.stat().st_ctime
+            
+            return source_latest > target_created
+        except:
+            # 如果出错，默认认为需要更新
+            return True
+    
+    def _handle_network_download(self, name: str, config: Dict[str, Any]) -> Path:
+        """
+        处理网络下载
+        
+        Args:
+            name: 依赖项名称
+            config: 依赖项配置
+            
+        Returns:
+            下载文件的路径
+        """
+        # 获取下载URL
+        download_url = self._get_download_url(config)
+        if not download_url:
+            raise DownloadError(f"无法获取 {name} 的下载链接")
+
+        # 确定文件名
+        filename = self._get_filename(config, download_url)
+        file_path = self.temp_dir / filename
+
+        # 如果文件已存在且大小正确，跳过下载
+        if file_path.exists() and self._verify_file(file_path, download_url):
+            self.logger.info(f"{name} 文件已存在，跳过下载")
+            return file_path
+
+        # 下载文件
+        self.logger.info(f"从 {download_url} 下载到 {file_path}")
+        self._download_file(download_url, file_path)
+
+        self.logger.info(f"{name} 下载完成")
+        return file_path
+    
+    def _get_filename_from_local_path(self, local_path: Path, config: Dict[str, Any]) -> str:
+        """
+        从本地路径和配置获取目标文件名
+        
+        Args:
+            local_path: 本地文件路径
+            config: 依赖项配置
+            
+        Returns:
+            目标文件名
+        """
+        # 如果配置中指定了文件名模式，使用它
+        if 'filename_pattern' in config:
+            version = config.get('version', 'local')
+            file_format = config.get('format', local_path.suffix.lstrip('.'))
+            pattern = config['filename_pattern']
+            
+            # 替换版本占位符
+            filename = pattern.format(version=version)
+            
+            # 如果没有扩展名，添加格式
+            if '.' not in filename:
+                filename = f"{filename}.{file_format}"
+                
+            return filename
+        
+        # 否则使用原文件名
+        return local_path.name
+    
+    def _files_are_same(self, file1: Path, file2: Path) -> bool:
+        """
+        检查两个文件是否相同
+        
+        Args:
+            file1: 文件1
+            file2: 文件2
+            
+        Returns:
+            是否相同
+        """
+        try:
+            # 简单比较文件大小和修改时间
+            stat1 = file1.stat()
+            stat2 = file2.stat()
+            return stat1.st_size == stat2.st_size and abs(stat1.st_mtime - stat2.st_mtime) < 1
+        except:
+            return False
     
     def _get_download_url(self, config: Dict[str, Any]) -> Optional[str]:
         """
