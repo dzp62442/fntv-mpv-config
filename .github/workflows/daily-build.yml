@@ -88,7 +88,7 @@ jobs:
           if ($dependency.enabled -eq $true) {
             $pluginInfo = "- 🔧 $($dependency.name)"
             if ($dependency.version) {
-              $pluginInfo += " (v$($dependency.version))"
+              $pluginInfo += " ($($dependency.version))"
             }
             $enabledPlugins += $pluginInfo
           }
@@ -105,6 +105,78 @@ jobs:
         
         Write-Host "启用的插件:"
         Write-Host $pluginsList
+      shell: pwsh
+    
+    - name: Generate directory structure
+      id: structure
+      run: |
+        # 生成实时目录结构
+        Write-Host "正在生成目录结构..."
+        
+        # 检查输出目录是否存在
+        if (Test-Path "output/fntv-mpv-config") {
+          $outputDir = "output/fntv-mpv-config"
+        } else {
+          Write-Host "输出目录不存在，使用默认结构"
+          $outputDir = $null
+        }
+        
+        $structure = @()
+        $structure += "fntv-mpv-config/"
+        
+        if ($outputDir -and (Test-Path $outputDir)) {
+          # 实时扫描生成的目录结构
+          $items = Get-ChildItem -Path $outputDir -Recurse | Sort-Object FullName
+          $basePath = (Get-Item $outputDir).FullName
+          
+          foreach ($item in $items) {
+            $relativePath = $item.FullName.Substring($basePath.Length + 1)
+            $depth = ($relativePath -split [regex]::Escape([IO.Path]::DirectorySeparatorChar)).Length - 1
+            $indent = "│   " * $depth
+            
+            if ($item.PSIsContainer) {
+              $structure += "$indent├── $($item.Name)/"
+            } else {
+              # 为重要文件添加注释
+              $comment = ""
+              switch ($item.Name) {
+                "mpv.exe" { $comment = "# MPV播放器主程序" }
+                "input.conf" { $comment = "# 快捷键配置" }
+                "mpv.conf" { $comment = "# MPV主配置文件" }
+                "uosc.conf" { $comment = "# uosc插件配置" }
+                "uosc_danmaku.conf" { $comment = "# 弹幕插件配置" }
+                "d3dcompiler_43.dll" { $comment = "# 依赖库文件" }
+                default { 
+                  if ($item.Extension -eq ".lua") { $comment = "# Lua脚本文件" }
+                  elseif ($item.Extension -eq ".otf" -or $item.Extension -eq ".ttf") { $comment = "# 字体文件" }
+                }
+              }
+              $structure += "$indent├── $($item.Name) $comment".TrimEnd()
+            }
+          }
+        } else {
+          # 如果输出目录不存在，使用预设结构
+          $structure += "├── mpv.exe                    # MPV播放器主程序"
+          $structure += "├── portable_config/           # 便携式配置目录"
+          $structure += "│   ├── input.conf            # 快捷键配置"
+          $structure += "│   ├── mpv.conf              # MPV主配置文件"
+          $structure += "│   ├── scripts/              # 插件脚本目录"
+          $structure += "│   ├── script-opts/          # 插件配置目录"
+          $structure += "│   └── fonts/                # 字体文件目录"
+          $structure += "└── d3dcompiler_43.dll        # 依赖库文件"
+        }
+        
+        # 将目录结构转换为多行字符串
+        $structureText = $structure -join "`n"
+        
+        # 设置输出变量
+        $structureText = $structureText -replace "`r`n", "`n" -replace "`r", "`n"
+        echo "DIRECTORY_STRUCTURE<<EOF" >> $env:GITHUB_OUTPUT
+        echo $structureText >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
+        
+        Write-Host "生成的目录结构:"
+        Write-Host $structureText
       shell: pwsh
     
     - name: Upload build artifacts
@@ -146,14 +218,7 @@ jobs:
           
           ## 📁 目录结构
           ```
-          fntv-mpv-config/
-          ├── mpv.exe                    # MPV播放器主程序
-          ├── portable_config/           # 便携式配置目录
-          │   ├── input.conf            # 快捷键配置
-          │   ├── scripts/              # 插件脚本
-          │   ├── script-opts/          # 插件配置
-          │   └── fonts/                # 字体文件
-          └── d3dcompiler_43.dll        # 依赖库
+          ${{ steps.structure.outputs.DIRECTORY_STRUCTURE }}
           ```
           
           ## ⚙️ 配置管理
