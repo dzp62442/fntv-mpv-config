@@ -304,8 +304,9 @@ class MPVConfigManager:
         """
         import shutil
         
-        # 定义要删除的构建产物
-        build_products = {'fntv-mpv-config'}  # 主要的构建产物目录
+        # 动态获取项目名称作为构建产物目录
+        project_name = self.config_manager.get_project_name()
+        build_products = {project_name}  # 主要的构建产物目录
         
         cleaned_files = 0
         cleaned_dirs = 0
@@ -328,7 +329,7 @@ class MPVConfigManager:
                 if item.name in build_products:
                     should_delete = True
                 # 删除版本化的构建目录
-                elif item.name.startswith(('mpv-', 'fntv-mpv-')):
+                elif item.name.startswith(('mpv-', f'{project_name}-')):
                     should_delete = True
                     
                 if should_delete:
@@ -354,11 +355,14 @@ class MPVConfigManager:
         
         filename = file_path.name
         
+        # 动态获取项目名称
+        project_name = self.config_manager.get_project_name()
+        
         # 构建生成的压缩包文件名模式
         build_patterns = [
-            'mpv-package-',           # InstallManager.create_package() 生成的文件
-            'fntv-mpv-',             # 项目相关的压缩包
-            'fntv-mpv-config-',      # 配置包
+            'mpv-package-',                    # InstallManager.create_package() 生成的文件
+            f'{project_name}-',                # 项目相关的压缩包
+            f'{project_name}-config-',         # 配置包
         ]
         
         # 检查是否匹配构建模式
