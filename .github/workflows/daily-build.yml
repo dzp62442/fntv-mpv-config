@@ -249,6 +249,7 @@ jobs:
           $structure += "│   │   └── uosc_danmaku/     # 弹幕插件"
           $structure += "│   ├── script-opts/          # 插件配置目录"
           $structure += "│   ├── fonts/                # 字体文件目录"
+          $structure += "│   ├── shaders/              # 着色器目录"
           $structure += "│   └── cache/                # 缓存目录"
           $structure += "├── mpv/                      # MPV配置目录"
           $structure += "│   └── fonts.conf            # 字体配置"
