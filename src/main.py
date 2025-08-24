@@ -278,6 +278,7 @@ def create_cli_parser() -> argparse.ArgumentParser:
   python -m src.main --disable uosc_danmaku   # 禁用指定依赖项
   python -m src.main --skip-download          # 跳过下载，直接安装
   python -m src.main --skip-install           # 只下载，不安装
+  python -m src.main --skip-package           # 跳过打包步骤
   python -m src.main --clean temp             # 清理临时下载文件
   python -m src.main --clean output           # 清理构建的安装包
   python -m src.main --clean all              # 清理所有临时文件和构建产物
@@ -311,13 +312,13 @@ def create_cli_parser() -> argparse.ArgumentParser:
     )
     
     parser.add_argument(
-        '--no-package',
+        '--skip-package',
         action='store_true',
-        help='不创建安装包'
+        help='跳过打包步骤'
     )
     
     parser.add_argument(
-        '--no-cleanup',
+        '--skip-cleanup',
         action='store_true',
         help='不清理临时文件'
     )
@@ -386,8 +387,8 @@ def main():
                 dependencies=args.deps,
                 skip_download=args.skip_download,
                 skip_install=args.skip_install,
-                create_package=not args.no_package,
-                cleanup=not args.no_cleanup
+                create_package=not (args.skip_package),
+                cleanup=not args.skip_cleanup
             )
             
             if not success:

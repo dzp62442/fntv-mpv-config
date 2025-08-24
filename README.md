@@ -494,7 +494,7 @@ python run.py --log-level DEBUG
 python run.py --skip-download
 
 # 不清理临时文件（用于检查中间结果）
-python run.py --no-cleanup
+python run.py --skip-cleanup
 
 # 只处理特定依赖项
 python run.py --deps uosc,uosc_danmaku
@@ -685,7 +685,7 @@ A:
 ### Q: 如何验证排除模式是否正确？
 A: 使用DEBUG模式运行特定依赖项：
 ```bash
-python run.py --deps plugin_name --log-level DEBUG --no-cleanup
+python run.py --deps plugin_name --log-level DEBUG --skip-cleanup
 ```
 然后检查输出日志和生成的文件。
 
