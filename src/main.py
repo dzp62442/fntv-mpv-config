@@ -240,28 +240,150 @@ class MPVConfigManager:
             if clean_temp:
                 temp_dir = self.config_manager.get_temp_dir()
                 if temp_dir.exists():
-                    shutil.rmtree(temp_dir)
-                    self.logger.info(f"已清理临时目录: {temp_dir}")
+                    self._clean_temp_directory(temp_dir)
                 else:
                     self.logger.info(f"临时目录不存在: {temp_dir}")
             
             if clean_output:
                 output_dir = self.config_manager.get_output_dir()
                 if output_dir.exists():
-                    # 只删除output目录中的文件，不删除目录本身
-                    for item in output_dir.iterdir():
-                        if item.is_file():
-                            item.unlink()
-                            self.logger.info(f"已删除文件: {item.name}")
-                        elif item.is_dir():
-                            shutil.rmtree(item)
-                            self.logger.info(f"已删除目录: {item.name}")
-                    self.logger.info(f"已清理输出目录: {output_dir}")
+                    self._clean_output_directory(output_dir)
                 else:
                     self.logger.info(f"输出目录不存在: {output_dir}")
                     
         except Exception as e:
             self.logger.error(f"清理目录失败: {e}")
+    
+    def _clean_temp_directory(self, temp_dir: Path):
+        """
+        智能清理临时目录，只删除构建相关文件
+        """
+        import shutil
+        
+        # 定义要删除的文件类型和目录
+        build_file_extensions = {'.7z', '.zip', '.tar', '.gz', '.bz2', '.xz', '.rar'}
+        build_directory_patterns = {'extracted_', '_extracted', 'download_'}
+        
+        cleaned_files = 0
+        cleaned_dirs = 0
+        
+        for item in temp_dir.iterdir():
+            should_delete = False
+            
+            if item.is_file():
+                # 删除压缩包文件
+                if item.suffix.lower() in build_file_extensions:
+                    should_delete = True
+                # 删除临时下载文件
+                elif item.name.startswith(('temp_', 'download_', 'cache_')):
+                    should_delete = True
+                
+                if should_delete:
+                    item.unlink()
+                    self.logger.info(f"已删除文件: {item.name}")
+                    cleaned_files += 1
+                    
+            elif item.is_dir():
+                # 删除解压目录
+                if any(pattern in item.name for pattern in build_directory_patterns):
+                    should_delete = True
+                # 删除以依赖项名称命名的目录（解压后的内容）
+                elif self._is_dependency_directory(item.name):
+                    should_delete = True
+                    
+                if should_delete:
+                    shutil.rmtree(item)
+                    self.logger.info(f"已删除目录: {item.name}")
+                    cleaned_dirs += 1
+        
+        self.logger.info(f"临时目录清理完成: 删除了 {cleaned_files} 个文件和 {cleaned_dirs} 个目录")
+    
+    def _clean_output_directory(self, output_dir: Path):
+        """
+        智能清理输出目录，只删除构建产物
+        """
+        import shutil
+        
+        # 定义要删除的构建产物
+        build_products = {'fntv-mpv-config'}  # 主要的构建产物目录
+        
+        cleaned_files = 0
+        cleaned_dirs = 0
+        
+        for item in output_dir.iterdir():
+            should_delete = False
+            
+            if item.is_file():
+                # 只删除构建生成的压缩包
+                if self._is_build_generated_archive(item):
+                    should_delete = True
+                    
+                if should_delete:
+                    item.unlink()
+                    self.logger.info(f"已删除文件: {item.name}")
+                    cleaned_files += 1
+                    
+            elif item.is_dir():
+                # 删除构建产物目录
+                if item.name in build_products:
+                    should_delete = True
+                # 删除版本化的构建目录
+                elif item.name.startswith(('mpv-', 'fntv-mpv-')):
+                    should_delete = True
+                    
+                if should_delete:
+                    shutil.rmtree(item)
+                    self.logger.info(f"已删除目录: {item.name}")
+                    cleaned_dirs += 1
+        
+        self.logger.info(f"输出目录清理完成: 删除了 {cleaned_files} 个文件和 {cleaned_dirs} 个目录")
+    
+    def _is_build_generated_archive(self, file_path: Path) -> bool:
+        """
+        检查文件是否为构建生成的压缩包
+        
+        Args:
+            file_path: 文件路径
+            
+        Returns:
+            是否为构建生成的压缩包
+        """
+        # 只识别压缩包文件
+        if file_path.suffix.lower() not in {'.zip', '.7z', '.tar', '.gz', '.bz2', '.xz'}:
+            return False
+        
+        filename = file_path.name
+        
+        # 构建生成的压缩包文件名模式
+        build_patterns = [
+            'mpv-package-',           # InstallManager.create_package() 生成的文件
+            'fntv-mpv-',             # 项目相关的压缩包
+            'fntv-mpv-config-',      # 配置包
+        ]
+        
+        # 检查是否匹配构建模式
+        for pattern in build_patterns:
+            if filename.startswith(pattern):
+                return True
+        
+        # 时间戳模式检查 (YYYYMMDD_HHMMSS)
+        import re
+        timestamp_pattern = r'.*-\d{8}_\d{6}\.(zip|7z|tar|gz|bz2|xz)$'
+        if re.match(timestamp_pattern, filename):
+            return True
+            
+        return False
+    
+    def _is_dependency_directory(self, dir_name: str) -> bool:
+        """
+        检查目录名是否为依赖项目录
+        """
+        try:
+            config = self.config_manager.load_config()
+            dependency_names = list(config.get('dependencies', {}).keys())
+            return dir_name in dependency_names
+        except:
+            return False
 
 
 def create_cli_parser() -> argparse.ArgumentParser:
@@ -279,9 +401,11 @@ def create_cli_parser() -> argparse.ArgumentParser:
   python -m src.main --skip-download          # 跳过下载，直接安装
   python -m src.main --skip-install           # 只下载，不安装
   python -m src.main --skip-package           # 跳过打包步骤
-  python -m src.main --clean temp             # 清理临时下载文件
-  python -m src.main --clean output           # 清理构建的安装包
-  python -m src.main --clean all              # 清理所有临时文件和构建产物
+  python -m src.main --clean temp             # 智能清理临时文件（压缩包、解压目录等）
+  python -m src.main --clean output           # 智能清理构建产物（fntv-mpv-config目录、包文件等）
+  python -m src.main --clean all              # 智能清理所有构建相关文件
+
+注意: --clean 命令现在使用智能清理，只删除构建相关的文件，保留用户自定义内容
         """
     )
     
@@ -343,7 +467,7 @@ def create_cli_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         '--clean',
         choices=['temp', 'output', 'all'],
-        help='清理目录 (temp: 临时文件, output: 构建产物, all: 全部)'
+        help='智能清理目录 (temp: 构建临时文件, output: 构建产物, all: 全部构建文件)'
     )
     
     # 日志选项

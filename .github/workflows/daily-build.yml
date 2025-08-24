@@ -45,10 +45,48 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
     
-    - name: Create output directory
+    - name: Read configuration and setup directories
+      id: config
       run: |
-        mkdir -p output
-        mkdir -p temp
+        # 读取package_cfg.json并解析配置
+        $config = Get-Content -Path "package_cfg.json" -Raw | ConvertFrom-Json
+        $outputDir = $config.config.output_dir
+        $tempDir = $config.config.temp_dir
+        
+        Write-Host "配置的输出目录: $outputDir"
+        Write-Host "配置的临时目录: $tempDir"
+        
+        # 转换为绝对路径并标准化
+        $outputDirResolved = Resolve-Path $outputDir -ErrorAction SilentlyContinue
+        if (-not $outputDirResolved) {
+          # 如果路径不存在，创建它
+          $outputDirAbsolute = [System.IO.Path]::GetFullPath($outputDir)
+          Write-Host "创建输出目录: $outputDirAbsolute"
+          New-Item -ItemType Directory -Path $outputDirAbsolute -Force
+          $outputDirResolved = $outputDirAbsolute
+        } else {
+          $outputDirResolved = $outputDirResolved.Path
+        }
+        
+        $tempDirResolved = Resolve-Path $tempDir -ErrorAction SilentlyContinue
+        if (-not $tempDirResolved) {
+          $tempDirAbsolute = [System.IO.Path]::GetFullPath($tempDir)
+          Write-Host "创建临时目录: $tempDirAbsolute"
+          New-Item -ItemType Directory -Path $tempDirAbsolute -Force
+          $tempDirResolved = $tempDirAbsolute
+        } else {
+          $tempDirResolved = $tempDirResolved.Path
+        }
+        
+        # 设置输出变量
+        echo "OUTPUT_DIR=$outputDirResolved" >> $env:GITHUB_OUTPUT
+        echo "TEMP_DIR=$tempDirResolved" >> $env:GITHUB_OUTPUT
+        echo "OUTPUT_DIR_RAW=$outputDir" >> $env:GITHUB_OUTPUT
+        echo "TEMP_DIR_RAW=$tempDir" >> $env:GITHUB_OUTPUT
+        
+        Write-Host "最终输出目录: $outputDirResolved"
+        Write-Host "最终临时目录: $tempDirResolved"
+      shell: pwsh
     
     - name: Run MPV config build
       run: |
@@ -62,8 +100,10 @@ jobs:
     
     - name: List output files
       run: |
+        echo "配置的输出目录: ${{ steps.config.outputs.OUTPUT_DIR_RAW }}"
+        echo "实际输出目录: ${{ steps.config.outputs.OUTPUT_DIR }}"
         echo "Generated files:"
-        ls -la output/
+        ls -la "${{ steps.config.outputs.OUTPUT_DIR }}" || echo "输出目录不存在或为空"
       shell: bash
     
     - name: Get current date
@@ -113,11 +153,18 @@ jobs:
         # 生成实时目录结构
         Write-Host "正在生成目录结构..."
         
+        # 使用动态输出目录
+        $configOutputDir = "${{ steps.config.outputs.OUTPUT_DIR }}"
+        $targetDir = Join-Path $configOutputDir "fntv-mpv-config"
+        
+        Write-Host "检查目录: $targetDir"
+        
         # 检查输出目录是否存在
-        if (Test-Path "output/fntv-mpv-config") {
-          $outputDir = "output/fntv-mpv-config"
+        if (Test-Path $targetDir) {
+          $outputDir = $targetDir
+          Write-Host "找到输出目录: $outputDir"
         } else {
-          Write-Host "输出目录不存在，使用默认结构"
+          Write-Host "输出目录不存在: $targetDir，使用默认结构"
           $outputDir = $null
         }
         
@@ -225,7 +272,7 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: fntv-mpv-config-${{ steps.date.outputs.DATE }}
-        path: output/
+        path: ${{ steps.config.outputs.OUTPUT_DIR }}
         retention-days: 30
     
     - name: Create Release (if on release branch)
@@ -272,7 +319,7 @@ jobs:
           - 📖 [使用文档](https://github.com/QiaoKes/fntv-mpv-config/blob/release/README.md)
           - 🐛 [问题反馈](https://github.com/QiaoKes/fntv-mpv-config/issues)
           - 🔄 [配置更新](https://github.com/QiaoKes/fntv-mpv-config/releases)
-        files: output/*.zip
+        files: ${{ steps.config.outputs.OUTPUT_DIR }}/*.zip
         draft: false
         prerelease: false
         token: ${{ secrets.GITHUB_TOKEN }}
@@ -281,5 +328,5 @@ jobs:
       if: always()
       run: |
         # 清理临时文件
-        rm -rf temp/
+        rm -rf "${{ steps.config.outputs.TEMP_DIR }}"
       shell: bash

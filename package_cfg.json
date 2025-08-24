@@ -1,9 +1,9 @@
 {
-    "name": "fntv-mpv-config",
+    "name": "fntv-mpv",
     "version": "1.0.0",
     "description": "MPV播放器和插件管理工具",
     "config": {
-        "output_dir": "./output",
+        "output_dir": "../fntv-electron/third_party",
         "temp_dir": "./temp",
         "custom_config_dir": "./custom_config",
         "github_proxy": "https://ghfast.top",
