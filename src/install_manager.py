@@ -55,17 +55,18 @@ class InstallManager:
             excludes = config.get('exclude_files', [])
             
             # 获取自定义配置安装规则
-            custom_config_rules = config.get('custom_config_rules', [])
+            custom_install_rules = config.get('custom_install_rules', [])
             
             if extracted_path:
-                # 默认安装所有解压文件到相应目录，但排除指定文件
-                self._install_extracted_files(name, config, extracted_path, excludes)
-                
-                # 如果有自定义配置规则，则按规则安装
-                if custom_config_rules:
-                    for rule in custom_config_rules:
+                if custom_install_rules:
+                    # 如果有自定义安装规则，使用自定义规则安装
+                    self.logger.info(f"{name} 使用自定义安装规则")
+                    for rule in custom_install_rules:
                         self._apply_custom_config_rule(name, rule, extracted_path)
-            elif not extracted_path:
+                else:
+                    # 使用默认安装方式
+                    self._install_extracted_files_default(name, extracted_path, excludes)
+            else:
                 self.logger.info(f"{name} 没有解压内容，仅安装自定义配置")
             
             # 安装custom_config目录下的自定义配置
@@ -76,32 +77,24 @@ class InstallManager:
         except Exception as e:
             raise InstallError(f"安装 {name} 失败: {e}")
     
-    def _install_extracted_files(self, name: str, config: Dict[str, Any], extracted_path: Path, excludes: List[str]):
+    def _install_extracted_files_default(self, name: str, extracted_path: Path, excludes: List[str]):
         """
-        安装解压的文件到默认位置，排除指定文件
+        使用默认规则安装解压的文件，移除硬编码逻辑
         
         Args:
             name: 依赖项名称
-            config: 依赖项配置
             extracted_path: 解压路径
             excludes: 排除的文件模式
         """
-        # 根据插件类型决定默认安装位置
+        # 根据依赖项类型决定默认安装位置
         if name == 'mpv':
             # MPV主程序安装到根目录
             target_path = self.output_dir
-        elif name == 'uosc':
-            # uosc插件不使用默认安装，因为它有特殊的目录结构
-            self.logger.info(f"{name} 使用自定义配置规则，跳过默认安装")
-            return
-        elif name.startswith('uosc'):
-            # 其他uosc相关插件安装到scripts目录
-            target_path = self.output_dir / "portable_config" / "scripts" / name
         else:
-            # 其他插件默认安装到scripts目录
-            target_path = self.output_dir / "portable_config" / "scripts" / name
+            # 其他插件默认安装到scripts目录下的子目录
+            target_path = self.portable_config_dir / "scripts" / name
         
-        self.logger.debug(f"默认安装: {extracted_path} -> {target_path}")
+        self.logger.info(f"默认安装 {name}: {extracted_path} -> {target_path}")
         if excludes:
             self.logger.debug(f"排除文件: {excludes}")
         
@@ -113,52 +106,53 @@ class InstallManager:
     
     def _apply_custom_config_rule(self, name: str, rule: Dict[str, Any], source_base: Path):
         """
-        应用自定义配置规则（从解压包中提取特定文件到指定位置）
+        应用自定义配置规则，参考 Node.js extraFiles 功能
         
         Args:
             name: 依赖项名称
-            rule: 自定义配置规则
+            rule: 自定义配置规则，格式：
+                  {
+                      "from": "source_path",  # 源路径（相对于解压目录）
+                      "to": "target_path",    # 目标路径（相对于输出目录）
+                      "filter": ["**/*"],     # 可选：过滤模式
+                      "exclude": []           # 可选：排除模式
+                  }
             source_base: 源目录基础路径
         """
-        source_rel = rule['from']
-        target_rel = rule['to']
+        source_rel = rule.get('from', '')
+        target_rel = rule.get('to', '')
         filters = rule.get('filter', ['**/*'])
-        excludes = rule.get('exclude', [])  # 自定义配置规则也支持排除
+        excludes = rule.get('exclude', [])
         
-        # 构建完整路径
-        source_path = source_base / source_rel if source_rel else source_base
+        # 构建源路径
+        if source_rel:
+            source_path = source_base / source_rel
+        else:
+            source_path = source_base
         
-        # 根据目标路径决定是放在根目录还是portable_config目录
-        if target_rel.startswith('portable_config/'):
-            # 如果目标路径明确指定了portable_config，则使用指定的路径
-            target_path = self.output_dir / target_rel
-        elif target_rel == '' or target_rel == '.':
-            # 如果目标是空或当前目录，则放在输出根目录
-            target_path = self.output_dir
-        elif target_rel == 'mpv':
-            # mpv子目录应该放在根目录下
+        # 构建目标路径 - 简化逻辑，统一处理
+        if target_rel:
+            # 目标路径统一相对于输出目录处理
             target_path = self.output_dir / target_rel
         else:
-            # 其他情况默认放在portable_config目录下
-            target_path = self.portable_config_dir / target_rel
+            # 目标路径为空，默认复制到 output_dir 根目录
+            target_path = self.output_dir
         
-        self.logger.debug(f"应用自定义配置规则: {source_path} -> {target_path}")
+        self.logger.debug(f"应用自定义配置规则 [{name}]: {source_path} -> {target_path}")
+        if filters != ['**/*']:
+            self.logger.debug(f"过滤模式: {filters}")
         if excludes:
             self.logger.debug(f"排除模式: {excludes}")
         
+        # 检查源路径是否存在
         if not source_path.exists():
             self.logger.warning(f"源路径不存在: {source_path}")
             return
         
-        # 创建目标目录
+        # 确保目标目录存在
         target_path.mkdir(parents=True, exist_ok=True)
         
-        # 根据过滤器复制文件，应用排除规则
-        for filter_pattern in filters:
-            self._copy_filtered_files(source_path, target_path, filter_pattern, excludes)
-        target_path.mkdir(parents=True, exist_ok=True)
-        
-        # 根据过滤器复制文件，应用排除规则
+        # 应用每个过滤器规则
         for filter_pattern in filters:
             self._copy_filtered_files(source_path, target_path, filter_pattern, excludes)
     

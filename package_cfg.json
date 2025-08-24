@@ -36,7 +36,7 @@
                 "*.md",
                 "LICENSE*"
             ],
-            "custom_config_rules": [
+            "custom_install_rules": [
                 {
                     "from": "scripts",
                     "to": "portable_config/scripts",

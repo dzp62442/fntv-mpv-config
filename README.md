@@ -158,15 +158,15 @@ python run.py --clean all       # 清理所有临时文件和构建产物
         "*.md",
         "LICENSE*"
       ],
-      "custom_config_rules": [          // 自定义安装规则
+      "custom_install_rules": [          // 自定义安装规则
         {
-          "from": "scripts",            // 源目录
-          "to": "portable_config/scripts", // 目标目录
-          "filter": ["**/*"]            // 文件过滤器
+          "from": "scripts",            // 从解压包的scripts目录
+          "to": "portable_config/scripts", // 安装到portable_config/scripts
+          "filter": ["**/*"]            // 包含所有文件
         },
         {
-          "from": "fonts",
-          "to": "portable_config/fonts",
+          "from": "fonts",              // 从解压包的fonts目录
+          "to": "portable_config/fonts", // 安装到portable_config/fonts
           "filter": ["**/*"]
         }
       ]
@@ -180,7 +180,7 @@ python run.py --clean all       # 清理所有临时文件和构建产物
 #### 核心配置参数
 
 - `exclude_files`: 排除文件数组，在安装时排除不需要的文件和目录
-- `custom_config_rules`: 自定义配置安装规则数组（可选）
+- `custom_install_rules`: 自定义配置安装规则数组（可选）
 
 #### exclude_files 排除模式
 
@@ -201,22 +201,46 @@ python run.py --clean all       # 清理所有临时文件和构建产物
 }
 ```
 
-#### custom_config_rules 自定义安装规则
+#### custom_install_rules 自定义安装规则
 
-`custom_config_rules` 用于定义特殊的文件安装规则：
+`custom_install_rules` 用于定义特殊的文件安装规则，参考 Node.js extraFiles 功能设计：
 
-- `from`: 源目录路径（相对于解压后的根目录）
+- `from`: 源目录路径（相对于解压后的根目录，可以为空）
 - `to`: 目标目录路径（相对于输出根目录）
-- `filter`: 文件过滤器数组，支持glob模式
+- `filter`: 文件过滤器数组，支持glob模式（可选，默认为 `["**/*"]`）
+- `exclude`: 排除模式数组，支持glob模式（可选）
+
+**设计理念**：
+- 简洁的 `from` -> `to` 映射关系
+- 统一的路径处理逻辑，避免复杂的特殊情况判断
+- 灵活的过滤器和排除规则支持
+
+**支持的文件模式**：
   - `**/*`: 所有文件
   - `*.lua`: 所有Lua文件
   - `**/script-opts/**`: script-opts目录下的所有文件
+  - `*.md`: 排除所有Markdown文件
 
 ### 配置工作原理
 
 1. **默认安装**: 所有文件默认会被安装到相应位置
 2. **文件排除**: 应用 `exclude_files` 模式排除不需要的文件
-3. **自定义规则**: 如果定义了 `custom_config_rules`，则使用自定义规则而非默认安装
+3. **自定义规则**: 如果定义了 `custom_install_rules`，则按规则精确安装文件
+
+**安装路径处理**：
+- 目标路径统一相对于输出目录处理
+- 支持 `portable_config/` 前缀的完整路径
+- 空目标路径默认安装到 `portable_config` 根目录
+
+**配置规则示例**：
+```json
+{
+  "from": "scripts",                    // 从解压包的scripts目录
+  "to": "portable_config/scripts",      // 安装到输出目录的portable_config/scripts
+  "filter": ["**/*.lua"],               // 只包含lua文件
+  "exclude": ["**/test/**"]             // 排除测试目录
+}
+```
 
 ### 配置示例详解
 
@@ -248,21 +272,23 @@ python run.py --clean all       # 清理所有临时文件和构建产物
       "*.md",
       "LICENSE*"
     ],
-    "custom_config_rules": [
+    "custom_install_rules": [
       {
-        "from": "scripts",              // 脚本文件
-        "to": "portable_config/scripts",
-        "filter": ["**/*"]
+        "from": "scripts",                    // 从解压包的scripts目录
+        "to": "portable_config/scripts",      // 安装到portable_config/scripts
+        "filter": ["**/*"]                    // 包含所有文件
       },
       {
-        "from": "fonts",                // 字体文件
-        "to": "portable_config/fonts", 
+        "from": "fonts",                      // 从解压包的fonts目录
+        "to": "portable_config/fonts",       // 安装到portable_config/fonts
         "filter": ["**/*"]
       }
     ]
   }
 }
 ```
+
+**注意**：此配置会跳过默认安装，只按照自定义规则安装指定的文件。
 
 #### MPV主程序（排除调试和文档文件）
 
@@ -326,30 +352,32 @@ custom_config/
 
 #### 1. exclude_files - 文件排除层
 - **目的**: 排除下载内容中不需要的文件
-- **时机**: 在默认安装过程中应用
+- **时机**: 在安装过程中应用
 - **适用场景**: 排除文档、许可证、调试文件等
 
-#### 2. custom_config_rules - 自定义安装层  
-- **目的**: 定义特殊的文件安装规则
+#### 2. custom_install_rules - 自定义安装层  
+- **目的**: 定义精确的文件安装规则
 - **时机**: 覆盖默认安装行为
 - **适用场景**: 复杂的目录结构映射
+- **设计理念**: 参考 Node.js extraFiles 功能，简洁的路径映射
 
 ### 处理流程
 
 ```
-下载文件 → 解压 → 应用exclude_files → 默认安装 OR 自定义规则安装
+下载文件 → 解压 → 选择安装模式 → 应用exclude_files → 复制文件
 ```
 
 1. **下载解压**: 从GitHub下载并解压文件
-2. **文件过滤**: 应用`exclude_files`排除不需要的文件  
-3. **安装选择**:
-   - 如果定义了`custom_config_rules`: 使用自定义规则
+2. **安装模式选择**:
+   - 如果定义了`custom_install_rules`: 使用自定义规则安装
    - 否则: 使用默认安装（直接复制到相应目录）
+3. **文件过滤**: 在任何安装模式中都会应用`exclude_files`排除规则
 
 ### 配置优先级
 
-- `custom_config_rules` > 默认安装
+- `custom_install_rules` > 默认安装
 - `exclude_files` 在任何安装方式中都会被应用
+- 自定义规则中的 `exclude` > `filter`
 
 ## 开发指南
 
@@ -391,13 +419,71 @@ python run.py --deps uosc,uosc_danmaku
 
 ```
 DEBUG - 应用exclude_files: ['*.md', 'LICENSE*']
+DEBUG - 应用自定义配置规则 [uosc]: temp\uosc_extracted\scripts -> output\fntv-mpv-config\portable_config\scripts
 DEBUG - 已复制: temp\uosc_extracted\scripts\uosc\main.lua -> output\...
 DEBUG - 排除文件: README.md (匹配模式: *.md)
 DEBUG - 排除文件: LICENSE (匹配模式: LICENSE*)
-DEBUG - 应用自定义配置规则: scripts -> portable_config/scripts
 ```
 
-这有助于验证排除规则是否按预期工作。
+这有助于验证排除规则和自定义配置规则是否按预期工作。
+
+## 自定义配置规则详解
+
+### 设计理念
+
+自定义配置规则参考了 Node.js 的 extraFiles 功能，采用简洁明了的设计：
+
+```json
+{
+  "from": "source_path",    // 源路径（相对于解压目录）
+  "to": "target_path",      // 目标路径（相对于输出目录）
+  "filter": ["**/*"],       // 可选：包含过滤器
+  "exclude": []             // 可选：排除过滤器
+}
+```
+
+### 路径处理规则
+
+1. **源路径 (`from`)**：
+   - 相对于解压后的根目录
+   - 可以为空字符串（表示整个解压目录）
+   - 示例：`"scripts"`、`"fonts"`、`""`
+
+2. **目标路径 (`to`)**：
+   - 统一相对于输出目录处理
+   - 支持完整路径如 `"portable_config/scripts"`
+   - 空字符串表示默认安装到 `portable_config` 根目录
+
+### 实际应用示例
+
+#### 示例1：标准插件安装
+```json
+{
+  "from": "scripts/plugin_name",
+  "to": "portable_config/scripts/plugin_name",
+  "filter": ["**/*"]
+}
+```
+
+#### 示例2：只复制特定文件类型
+```json
+{
+  "from": "src", 
+  "to": "portable_config/scripts/custom",
+  "filter": ["**/*.lua", "**/*.js"],
+  "exclude": ["**/test/**", "**/*.md"]
+}
+```
+
+#### 示例3：整个目录重新映射
+```json
+{
+  "from": "",  // 整个解压目录
+  "to": "portable_config",
+  "filter": ["**/*.lua"],
+  "exclude": ["**/docs/**", "**/examples/**"]
+}
+```
 
 ## 运行测试
 
@@ -462,7 +548,26 @@ winget install --id 7zip.7zip
 A: 检查网络连接，确认GitHub访问正常。可以使用`--log-level DEBUG`查看详细错误信息。
 
 ### Q: 如何添加新的插件？
-A: 在`package_cfg.json`的`dependencies`中添加新的插件配置，包括下载地址、版本号和安装规则。
+A: 在`package_cfg.json`的`dependencies`中添加新的插件配置。对于简单插件，只需配置基本参数和排除规则；对于复杂插件，可以使用自定义配置规则精确控制文件安装位置。
+
+示例：
+```json
+{
+  "new_plugin": {
+    "name": "新插件",
+    "url": "https://github.com/author/plugin/releases",
+    "version": "1.0.0",
+    "exclude_files": ["*.md", "LICENSE*"],
+    "custom_install_rules": [
+      {
+        "from": "src",
+        "to": "portable_config/scripts/new_plugin",
+        "filter": ["**/*.lua"]
+      }
+    ]
+  }
+}
+```
 
 ### Q: 自定义配置不生效？
 A: 确认配置文件放在正确的`custom_config`目录结构中，并且文件名和路径正确。
@@ -504,9 +609,16 @@ python run.py --deps plugin_name --log-level DEBUG --no-cleanup
 
 ## 更新日志
 
+### v1.0.1 (2025-08-24)
+- 🔧 **重构自定义配置规则处理**：参考 Node.js extraFiles 功能重新设计
+- ✨ **简化路径处理逻辑**：统一目标路径处理，避免复杂的特殊情况判断
+- 🐛 **修复路径重复问题**：解决 `portable_config/portable_config` 重复路径问题
+- 📚 **改善文档说明**：添加更详细的配置规则说明和示例
+- 🧹 **代码优化**：移除重复代码，提高代码可维护性
+
 ### v1.0.0 (2025-08-24)
-- 初始版本发布
+- 🎉 初始版本发布
 - 支持MPV、UOSC、UOSC_DANMAKU的自动下载和配置
 - 实现GitHub Actions自动化构建
 - 提供完整的配置管理功能
-fntv-electron配套mpv配置
+- fntv-electron配套mpv配置
