@@ -76,6 +76,37 @@ jobs:
         Write-Host "当前北京时间: $dateString"
       shell: pwsh
     
+    - name: Parse enabled plugins
+      id: plugins
+      run: |
+        # 读取package_cfg.json并解析启用的插件
+        $config = Get-Content -Path "package_cfg.json" -Raw | ConvertFrom-Json
+        $enabledPlugins = @()
+        
+        foreach ($key in $config.dependencies.PSObject.Properties.Name) {
+          $dependency = $config.dependencies.$key
+          if ($dependency.enabled -eq $true) {
+            $pluginInfo = "- 🔧 $($dependency.name)"
+            if ($dependency.version) {
+              $pluginInfo += " (v$($dependency.version))"
+            }
+            $enabledPlugins += $pluginInfo
+          }
+        }
+        
+        # 将插件列表转换为多行字符串
+        $pluginsList = $enabledPlugins -join "`n"
+        
+        # 设置输出变量（处理多行文本）
+        $pluginsList = $pluginsList -replace "`r`n", "`n" -replace "`r", "`n"
+        echo "ENABLED_PLUGINS<<EOF" >> $env:GITHUB_OUTPUT
+        echo $pluginsList >> $env:GITHUB_OUTPUT
+        echo "EOF" >> $env:GITHUB_OUTPUT
+        
+        Write-Host "启用的插件:"
+        Write-Host $pluginsList
+      shell: pwsh
+    
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -98,11 +129,14 @@ jobs:
           📝 提交ID: ${{ github.sha }}
           🎯 项目版本: v1.0.1
           
-          📦 本次构建包含:
-          - 🎥 MPV播放器
-          - 🎨 MPV插件
-          - ⚙️ 预配置的快捷键和播放设置
-          - 🔧 便携式配置文件结构
+          ## 📦 本次构建包含
+          ### 🎥 核心组件
+          - MPV播放器主程序
+          - 便携式配置文件结构
+          - 预配置的快捷键和播放设置
+          
+          ### 🔧 启用的插件/组件
+          ${{ steps.plugins.outputs.ENABLED_PLUGINS }}
           
           ## 🚀 快速开始
           1. 下载 `mpv-package-*.zip` 文件
