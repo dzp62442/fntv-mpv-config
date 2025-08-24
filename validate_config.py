@@ -13,7 +13,7 @@ current_dir = Path(__file__).parent
 src_dir = current_dir / 'src'
 sys.path.insert(0, str(src_dir))
 
-from src.config_manager import ConfigManager, ConfigError
+from config_manager import ConfigManager, ConfigError
 
 
 def validate_config(config_path="package_cfg.json"):
@@ -55,24 +55,53 @@ def validate_config(config_path="package_cfg.json"):
             print(f"   {name}: {dep_config['name']} {dep_config['version']} ({status})")
             
             # 检查必需字段
-            required_fields = ['name', 'url', 'version', 'filename_pattern', 'format']
-            missing_fields = [field for field in required_fields if field not in dep_config]
+            has_url = 'url' in dep_config
+            has_local_path = 'local_path' in dep_config
+            
+            if not has_url and not has_local_path:
+                print(f"      ⚠️  缺少下载源: 需要 'url' 或 'local_path' 字段")
+            
+            basic_fields = ['name', 'version', 'filename_pattern', 'format']
+            missing_fields = [field for field in basic_fields if field not in dep_config]
             
             if missing_fields:
                 print(f"      ⚠️  缺少字段: {', '.join(missing_fields)}")
             
-            # 检查安装规则
-            if 'install_rules' in dep_config:
-                rules_count = len(dep_config['install_rules'])
-                print(f"      📋 安装规则: {rules_count} 条")
+            # 检查本地路径
+            if has_local_path:
+                local_path = Path(dep_config['local_path'])
+                if not local_path.is_absolute():
+                    local_path = current_dir / local_path
                 
-                for i, rule in enumerate(dep_config['install_rules']):
-                    rule_fields = ['from', 'to', 'filter']
-                    missing_rule_fields = [field for field in rule_fields if field not in rule]
+                if local_path.exists():
+                    if local_path.is_file():
+                        print(f"      📁 本地文件: {dep_config['local_path']}")
+                    elif local_path.is_dir():
+                        print(f"      📁 本地文件夹: {dep_config['local_path']}")
+                else:
+                    print(f"      ⚠️  本地路径不存在: {dep_config['local_path']}")
+            
+            # 检查自定义安装规则
+            if 'custom_install_rules' in dep_config:
+                rules_count = len(dep_config['custom_install_rules'])
+                print(f"      📋 自定义安装规则: {rules_count} 条")
+                
+                for i, rule in enumerate(dep_config['custom_install_rules']):
+                    required_rule_fields = ['from', 'to']
+                    missing_rule_fields = [field for field in required_rule_fields if field not in rule]
                     if missing_rule_fields:
                         print(f"         ⚠️  规则 {i+1} 缺少字段: {', '.join(missing_rule_fields)}")
-            else:
-                print(f"      ⚠️  没有定义安装规则")
+                    else:
+                        filter_info = f" (过滤器: {len(rule.get('filter', []))} 条)" if 'filter' in rule else ""
+                        exclude_info = f" (排除: {len(rule.get('exclude', []))} 条)" if 'exclude' in rule else ""
+                        print(f"         ✅ 规则 {i+1}: {rule['from']} -> {rule['to']}{filter_info}{exclude_info}")
+            
+            # 检查文件排除规则
+            if 'exclude_files' in dep_config:
+                exclude_count = len(dep_config['exclude_files'])
+                print(f"      🚫 文件排除规则: {exclude_count} 条")
+                for exclude in dep_config['exclude_files']:
+                    print(f"         - {exclude}")
         
         # 验证启用的依赖项
         enabled_deps = manager.get_enabled_dependencies()
