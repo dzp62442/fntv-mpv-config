@@ -125,9 +125,9 @@ jobs:
         $structure += "fntv-mpv-config/"
         
         if ($outputDir -and (Test-Path $outputDir)) {
-          # 简化实现：递归扫描三层深度
+          # 扫描四层深度：fntv-mpv-config -> portable_config -> scripts -> uosc -> 内容
           function Add-DirectoryStructure {
-            param($Path, $Prefix = "", $MaxDepth = 3, $CurrentDepth = 0)
+            param($Path, $Prefix = "", $MaxDepth = 5, $CurrentDepth = 0)
             
             if ($CurrentDepth -ge $MaxDepth) { return }
             
@@ -144,10 +144,16 @@ jobs:
                 switch ($item.Name) {
                   "portable_config" { $comment = "# 便携式配置目录" }
                   "mpv" { $comment = "# MPV配置目录" }
-                  "scripts" { $comment = "# 插件脚本" }
-                  "script-opts" { $comment = "# 插件配置" }
-                  "fonts" { $comment = "# 字体文件" }
+                  "scripts" { $comment = "# 插件脚本目录" }
+                  "script-opts" { $comment = "# 插件配置目录" }
+                  "fonts" { $comment = "# 字体文件目录" }
                   "cache" { $comment = "# 缓存目录" }
+                  "uosc" { $comment = "# uosc插件" }
+                  "uosc_danmaku" { $comment = "# 弹幕插件" }
+                  "elements" { $comment = "# UI元素" }
+                  "lib" { $comment = "# 库文件" }
+                  "bin" { $comment = "# 二进制文件" }
+                  "intl" { $comment = "# 国际化文件" }
                   default { $comment = "" }
                 }
                 $structure += "$currentPrefix $($item.Name)/ $comment".TrimEnd()
@@ -163,30 +169,33 @@ jobs:
                   "uosc_danmaku.conf" { $comment = "# 弹幕插件配置" }
                   "fonts.conf" { $comment = "# 字体配置" }
                   "d3dcompiler_43.dll" { $comment = "# 依赖库" }
+                  "main.lua" { $comment = "# 主脚本" }
                   default {
                     if ($item.Extension -eq ".lua") { $comment = "# Lua脚本" }
                     elseif ($item.Extension -match "\.(otf|ttf)$") { $comment = "# 字体文件" }
                     elseif ($item.Extension -eq ".dll") { $comment = "# 依赖库" }
+                    elseif ($item.Extension -eq ".exe") { $comment = "# 可执行文件" }
                   }
                 }
                 $structure += "$currentPrefix $($item.Name) $comment".TrimEnd()
               }
             }
           }
-          
-          # 扫描输出目录
-          Add-DirectoryStructure -Path $outputDir -MaxDepth 3
+
+          # 扫描输出目录，深度4层
+          Add-DirectoryStructure -Path $outputDir -MaxDepth 4
         } else {
-          # 预设结构（三层深度）
+          # 预设结构（五层深度示例）
           $structure += "├── mpv.exe                    # MPV播放器主程序"
           $structure += "├── mpv.com                    # MPV命令行版本"
           $structure += "├── portable_config/           # 便携式配置目录"
           $structure += "│   ├── input.conf            # 快捷键配置"
           $structure += "│   ├── mpv.conf              # MPV主配置"
-          $structure += "│   ├── scripts/              # 插件脚本"
-          $structure += "│   │   └── uosc/             # uosc插件"
-          $structure += "│   ├── script-opts/          # 插件配置"
-          $structure += "│   ├── fonts/                # 字体文件"
+          $structure += "│   ├── scripts/              # 插件脚本目录"
+          $structure += "│   │   ├── uosc/             # uosc插件"
+          $structure += "│   │   └── uosc_danmaku/     # 弹幕插件"
+          $structure += "│   ├── script-opts/          # 插件配置目录"
+          $structure += "│   ├── fonts/                # 字体文件目录"
           $structure += "│   └── cache/                # 缓存目录"
           $structure += "├── mpv/                       # MPV配置目录"
           $structure += "│   └── fonts.conf            # 字体配置"
