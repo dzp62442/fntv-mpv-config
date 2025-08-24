@@ -125,45 +125,72 @@ jobs:
         $structure += "fntv-mpv-config/"
         
         if ($outputDir -and (Test-Path $outputDir)) {
-          # 实时扫描生成的目录结构
-          $items = Get-ChildItem -Path $outputDir -Recurse | Sort-Object FullName
-          $basePath = (Get-Item $outputDir).FullName
-          
-          foreach ($item in $items) {
-            $relativePath = $item.FullName.Substring($basePath.Length + 1)
-            $depth = ($relativePath -split [regex]::Escape([IO.Path]::DirectorySeparatorChar)).Length - 1
-            $indent = "│   " * $depth
+          # 简化实现：递归扫描三层深度
+          function Add-DirectoryStructure {
+            param($Path, $Prefix = "", $MaxDepth = 3, $CurrentDepth = 0)
             
-            if ($item.PSIsContainer) {
-              $structure += "$indent├── $($item.Name)/"
-            } else {
-              # 为重要文件添加注释
+            if ($CurrentDepth -ge $MaxDepth) { return }
+            
+            $items = Get-ChildItem -Path $Path | Sort-Object Name
+            for ($i = 0; $i -lt $items.Count; $i++) {
+              $item = $items[$i]
+              $isLast = ($i -eq $items.Count - 1)
+              $currentPrefix = $Prefix + $(if ($isLast) { "└──" } else { "├──" })
+              $nextPrefix = $Prefix + $(if ($isLast) { "    " } else { "│   " })
+              
+              # 添加注释
               $comment = ""
-              switch ($item.Name) {
-                "mpv.exe" { $comment = "# MPV播放器主程序" }
-                "input.conf" { $comment = "# 快捷键配置" }
-                "mpv.conf" { $comment = "# MPV主配置文件" }
-                "uosc.conf" { $comment = "# uosc插件配置" }
-                "uosc_danmaku.conf" { $comment = "# 弹幕插件配置" }
-                "d3dcompiler_43.dll" { $comment = "# 依赖库文件" }
-                default { 
-                  if ($item.Extension -eq ".lua") { $comment = "# Lua脚本文件" }
-                  elseif ($item.Extension -eq ".otf" -or $item.Extension -eq ".ttf") { $comment = "# 字体文件" }
+              if ($item.PSIsContainer) {
+                switch ($item.Name) {
+                  "portable_config" { $comment = "# 便携式配置目录" }
+                  "mpv" { $comment = "# MPV配置目录" }
+                  "scripts" { $comment = "# 插件脚本" }
+                  "script-opts" { $comment = "# 插件配置" }
+                  "fonts" { $comment = "# 字体文件" }
+                  "cache" { $comment = "# 缓存目录" }
+                  default { $comment = "" }
                 }
+                $structure += "$currentPrefix $($item.Name)/ $comment".TrimEnd()
+                # 递归处理子目录
+                Add-DirectoryStructure -Path $item.FullName -Prefix $nextPrefix -MaxDepth $MaxDepth -CurrentDepth ($CurrentDepth + 1)
+              } else {
+                switch ($item.Name) {
+                  "mpv.exe" { $comment = "# MPV播放器主程序" }
+                  "mpv.com" { $comment = "# MPV命令行版本" }
+                  "input.conf" { $comment = "# 快捷键配置" }
+                  "mpv.conf" { $comment = "# MPV主配置" }
+                  "uosc.conf" { $comment = "# uosc插件配置" }
+                  "uosc_danmaku.conf" { $comment = "# 弹幕插件配置" }
+                  "fonts.conf" { $comment = "# 字体配置" }
+                  "d3dcompiler_43.dll" { $comment = "# 依赖库" }
+                  default {
+                    if ($item.Extension -eq ".lua") { $comment = "# Lua脚本" }
+                    elseif ($item.Extension -match "\.(otf|ttf)$") { $comment = "# 字体文件" }
+                    elseif ($item.Extension -eq ".dll") { $comment = "# 依赖库" }
+                  }
+                }
+                $structure += "$currentPrefix $($item.Name) $comment".TrimEnd()
               }
-              $structure += "$indent├── $($item.Name) $comment".TrimEnd()
             }
           }
+          
+          # 扫描输出目录
+          Add-DirectoryStructure -Path $outputDir -MaxDepth 3
         } else {
-          # 如果输出目录不存在，使用预设结构
+          # 预设结构（三层深度）
           $structure += "├── mpv.exe                    # MPV播放器主程序"
+          $structure += "├── mpv.com                    # MPV命令行版本"
           $structure += "├── portable_config/           # 便携式配置目录"
           $structure += "│   ├── input.conf            # 快捷键配置"
-          $structure += "│   ├── mpv.conf              # MPV主配置文件"
-          $structure += "│   ├── scripts/              # 插件脚本目录"
-          $structure += "│   ├── script-opts/          # 插件配置目录"
-          $structure += "│   └── fonts/                # 字体文件目录"
-          $structure += "└── d3dcompiler_43.dll        # 依赖库文件"
+          $structure += "│   ├── mpv.conf              # MPV主配置"
+          $structure += "│   ├── scripts/              # 插件脚本"
+          $structure += "│   │   └── uosc/             # uosc插件"
+          $structure += "│   ├── script-opts/          # 插件配置"
+          $structure += "│   ├── fonts/                # 字体文件"
+          $structure += "│   └── cache/                # 缓存目录"
+          $structure += "├── mpv/                       # MPV配置目录"
+          $structure += "│   └── fonts.conf            # 字体配置"
+          $structure += "└── d3dcompiler_43.dll         # 依赖库"
         }
         
         # 将目录结构转换为多行字符串
