@@ -69,10 +69,12 @@ jobs:
     - name: Get current date
       id: date
       run: |
-        # 设置时区为北京时间（UTC+8）
-        export TZ='Asia/Shanghai'
-        echo "DATE=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_OUTPUT
-      shell: bash
+        # 在 Windows 环境下获取北京时间
+        $beijingTime = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId([DateTime]::UtcNow, 'China Standard Time')
+        $dateString = $beijingTime.ToString('yyyyMMdd_HHmmss')
+        echo "DATE=$dateString" >> $env:GITHUB_OUTPUT
+        Write-Host "当前北京时间: $dateString"
+      shell: pwsh
     
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
