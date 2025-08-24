@@ -186,12 +186,12 @@ jobs:
         
         if ($outputDir -and (Test-Path $outputDir)) {
           Write-Host "扫描目录: $outputDir"
-          # 扫描输出目录，深度4层
-          $dirStructure = Add-DirectoryStructure -Path $outputDir -MaxDepth 4
+          # 扫描输出目录，深度3层
+          $dirStructure = Add-DirectoryStructure -Path $outputDir -MaxDepth 3
           $structure += $dirStructure
           Write-Host "扫描到 $($dirStructure.Count) 个项目"
         } else {
-          # 预设结构（4层深度示例）
+          # 预设结构（3层深度示例）
           $structure += "├── mpv.exe                   # MPV播放器主程序"
           $structure += "├── mpv.com                   # MPV命令行版本"
           $structure += "├── portable_config/          # 便携式配置目录"
