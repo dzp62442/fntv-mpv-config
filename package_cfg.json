@@ -53,7 +53,7 @@
             "name": "uosc弹幕插件",
             "enabled": true,
             "url": "https://github.com/Tony15246/uosc_danmaku/releases",
-            "version": "v1.3.2",
+            "version": "v2.0.0",
             "filename_pattern": "uosc_danmaku",
             "format": "zip",
             "exclude_files": [
