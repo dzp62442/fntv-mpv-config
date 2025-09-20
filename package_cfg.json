@@ -60,6 +60,12 @@
                 "*.md",
                 "LICENSE*"
             ]
+        },
+        "smart_skip": {
+            "name": "智能跳过片头片尾插件",
+            "enabled": true,
+            "local_path": "./local_packages/smart_skip",
+            "version": "local"
         }
     }
 }
