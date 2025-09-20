@@ -25,11 +25,12 @@ GitHub: https://github.com/QiaoKes/fntv-mpv-config
 ]]
 
 local mp = require('mp')
-local utils = require('mp.utils')
 local msg = require('mp.msg')
 local mutils = require('./mutils')
+local opt = require('mp.options')
+local utils = require('mp.utils')
 
--- 检测模式
+-- 检测模式映射
 local DETECT_MODE = {
     CHAPTER = 1, -- 通过章节检测片头片尾
     MANUAL = 2,  -- 通过手动指定片头片尾
@@ -37,19 +38,35 @@ local DETECT_MODE = {
     AUTO = 4     -- 先通过章节检测，再通过手动指定检测，如果没配置则使用内容检测
 }
 
--- smart_skip 参数
-local detect_enabled = true
-local current_detect_mode = DETECT_MODE.AUTO
+-- 配置选项定义
+local options = {
+    -- 基础设置
+    enabled = true,
+    detect_mode = DETECT_MODE.AUTO, -- auto, chapter, manual, content
 
--- 章节检测参数
-local MIN_INTRO_DUR = 10            -- 最短片头长度s
-local MAX_INTRO_DUR = 150           -- 最长片头长度s
-local MAX_SCAN_WINDOW = 600         -- 最大扫描窗口（10分钟）
-local MAX_SCAN_VIDEO_PERCENT = 0.25 -- 视频长度百分比（25%）
+    -- 章节检测参数
+    min_skip_duration = 10,        -- 最短片头/片尾长度s
+    max_skip_duration = 150,       -- 最长片头/片尾长度s
+    max_scan_window = 600,          -- 最大扫描窗口（10分钟）
+    max_scan_percent = 25,          -- 视频长度百分比
 
--- 手动指定片头片尾时间
-local manual_intro = { start_time = 0, end_time = 0 }
-local manual_outro = { start_time = 0, end_time = 0 }
+    -- 手动指定片头片尾时间
+    manual_intro_start = 0,
+    manual_intro_end = 0,
+    manual_outro_start = 0,
+    manual_outro_end = 0,
+
+    -- 内容检测参数
+    silence_threshold = -50,        -- 静音阈值 dB
+    silence_min_duration = 2,       -- 最短静音持续时间 s
+    black_min_duration = 2,         -- 最短黑屏持续时间 s
+    black_threshold = 0.1,          -- 黑屏阈值（0-1之间）
+    content_intro_skip_dur = 300,   -- 内容检测参数 片头跳过时间 s
+    content_outro_skip_dur = 300,   -- 内容检测参数 片尾跳过时间 s
+}
+
+-- 读取配置文件
+opt.read_options(options, "smart_skip")
 
 --  通过章节检测片头片尾
 local function detect_by_chapters()
@@ -57,12 +74,14 @@ local function detect_by_chapters()
     local D = mutils.dur()
     if not chapters or not D or D <= 0 then return nil end
 
-    local scan_win = math.min(MAX_SCAN_WINDOW, MAX_SCAN_VIDEO_PERCENT * D) -- 前 10 分钟/25% 取小
+    local scan_win = math.min(options.max_scan_window, (options.max_scan_percent / 100) * D) -- 前 10 分钟/25% 取小
     -- 寻找片头候选区间（在视频开头部分）
-    local intro_candidates = mutils.find_sections_in_window(chapters, 0, scan_win, MIN_INTRO_DUR, MAX_INTRO_DUR)
+    local intro_candidates = mutils.find_sections_in_window(chapters, 0, scan_win, 
+        options.min_skip_duration, options.max_skip_duration)
 
     -- 寻找片尾候选区间（在视频结尾部分）
-    local outro_candidates = mutils.find_sections_in_window(chapters, D - scan_win, D, MIN_INTRO_DUR, MAX_INTRO_DUR)
+    local outro_candidates = mutils.find_sections_in_window(chapters, D - scan_win, D, 
+        options.min_skip_duration, options.max_skip_duration)
 
     -- 如果都没找到符合条件的区间
     if #intro_candidates == 0 and #outro_candidates == 0 then
@@ -84,10 +103,10 @@ end
 
 -- 通过手动指定片头片尾
 local function detect_by_manual()
-    local intro = (manual_intro.start_time >= 0 and manual_intro.end_time > manual_intro.start_time) and
-        { manual_intro.start_time, manual_intro.end_time } or nil
-    local outro = (manual_outro.start_time >= 0 and manual_outro.end_time > manual_outro.start_time) and
-        { manual_outro.start_time, manual_outro.end_time } or nil
+    local intro = (options.manual_intro_start >= 0 and options.manual_intro_end > options.manual_intro_start) and
+        { options.manual_intro_start, options.manual_intro_end } or nil
+    local outro = (options.manual_outro_start >= 0 and options.manual_outro_end > options.manual_outro_start) and
+        { options.manual_outro_start, options.manual_outro_end } or nil
     if not intro and not outro then return nil end
     return { intro = intro, outro = outro }
 end
@@ -101,13 +120,13 @@ local function detect_by_content()
 end
 
 local function detect_by_mode()
-    if current_detect_mode == DETECT_MODE.CHAPTER then
+    if options.detect_mode == DETECT_MODE.CHAPTER then
         return detect_by_chapters()
-    elseif current_detect_mode == DETECT_MODE.MANUAL then
+    elseif options.detect_mode == DETECT_MODE.MANUAL then
         return detect_by_manual()
-    elseif current_detect_mode == DETECT_MODE.CONTENT then
+    elseif options.detect_mode == DETECT_MODE.CONTENT then
         return detect_by_content()
-    elseif current_detect_mode == DETECT_MODE.AUTO then
+    elseif options.detect_mode == DETECT_MODE.AUTO then
         local result = detect_by_chapters()
         if result then return result end
         result = detect_by_manual()
@@ -121,6 +140,11 @@ end
 
 -- 智能跳过片头片尾
 local function smart_skip()
+    if not options.enabled then
+        msg.info("智能跳过功能未启用")
+        return
+    end
+
     local has_skip_intro = false
     local has_skip_outro = false
     local result = detect_by_mode()
@@ -133,16 +157,23 @@ local function smart_skip()
     -- 监听播放位置以执行跳过
     mp.observe_property("time-pos", "number", function()
         if result.intro and not has_skip_intro then
-            local why = string.format("⏭️ 片头区间: %.1f - %.1f 秒. 正在跳过片头...", result.intro[1], result.intro[2])
-            has_skip_intro = mutils.skip_if_in(result.intro[1], result.intro[2], why)
+            has_skip_intro = mutils.skip_if_in(result.intro[1], result.intro[2], "⏭️ 正在跳过片头...")
         end
 
         if result.outro and not has_skip_outro then
-            local why = string.format("⏭️ 片尾区间: %.1f - %.1f 秒. 正在跳过片尾...", result.outro[1], result.outro[2])
-            has_skip_outro = mutils.skip_if_in(result.outro[1], result.outro[2], why)
+            has_skip_outro = mutils.skip_if_in(result.outro[1], result.outro[2], "⏭️ 正在跳过片尾...")
         end
     end)
 end
 
--- 在文件加载时也显示章节信息
-mp.register_event("file-loaded", smart_skip)
+-- 初始化函数
+local function init()
+    -- 读取配置文件
+    opt.read_options(options, mp.get_script_name())
+    
+    -- 注册事件处理器
+    mp.register_event("file-loaded", smart_skip)
+end
+
+-- 启动初始化
+init()

@@ -28,7 +28,7 @@ local mp = require('mp')
 local utils = require('mp.utils')
 local msg = require('mp.msg')
 
-mutils = {}
+local mutils = {}
 
 function mutils.to_json(tbl)
     -- utils.format_json 成功时返回 1 个值；失败时返回 (nil, "error")
@@ -47,7 +47,7 @@ function mutils.show_message(text, duration)
     -- 设置OSD样式和对齐方式
     local ass = mp.get_property_osd("osd-ass-cc/0")
     -- {\\an1} 表示左下角对齐，{\\an2} 表示底部居中对齐
-    local styled_text = ass .. "{\\an2}" .. text
+    local styled_text = ass .. "{\\an1}" .. text
     mp.osd_message(styled_text, duration)
     msg.info(text)
 end
@@ -63,7 +63,7 @@ end
 function mutils.skip_if_in(a, b, why)
     local curr_pos = mutils.timepos()
     if curr_pos >= a and curr_pos < b then
-        mutils.show_message(why)
+        mutils.show_message(why, 2)
         mp.set_property_number('time-pos', b)
         return true
     end
@@ -95,4 +95,5 @@ function mutils.find_sections_in_window(chapters, start_time, end_time, min_dur,
     return candidates
 end
 
+-- 获取anime的
 return mutils
