@@ -30,32 +30,10 @@ local mutils = require('./mutils')
 local opt = require('mp.options')
 local utils = require('mp.utils')
 local api = require('./api')
-
--- 检测模式映射
-local DETECT_MODE = {
-    CHAPTER = 1, -- 通过章节检测片头片尾
-    MANUAL = 2,  -- 通过手动指定片头片尾
-    AUTO = 3     -- 先通过章节检测，再通过手动指定检测
-}
-
--- 配置选项定义
-local options = {
-    -- 基础设置
-    enabled = true,
-    detect_mode = DETECT_MODE.AUTO, -- auto, chapter, manual, content
-
-    -- 章节检测参数
-    min_skip_duration = 10,  -- 最短片头/片尾长度s
-    max_skip_duration = 150, -- 最长片头/片尾长度s
-    max_scan_window = 600,   -- 最大扫描窗口（10分钟）
-    max_scan_percent = 25,   -- 视频长度百分比
-
-    -- 手动指定片头片尾时间, 从服务器获取，不允许在配置文件设置
-    manual_intro_start = 0,
-    manual_intro_end = 0,
-    manual_outro_start = 0,
-    manual_outro_end = 0,
-}
+local options = require('./options')
+require("./menu")
+local opts = options.opts
+local DETECT_MODE = options.DETECT_MODE
 
 --  通过章节检测片头片尾
 local function detect_by_chapters()
@@ -63,14 +41,14 @@ local function detect_by_chapters()
     local D = mutils.dur()
     if not chapters or not D or D <= 0 then return nil end
 
-    local scan_win = math.min(options.max_scan_window, (options.max_scan_percent / 100) * D) -- 前 10 分钟/25% 取小
+    local scan_win = math.min(opts.max_scan_window, (opts.max_scan_percent / 100) * D) -- 前 10 分钟/25% 取小
     -- 寻找片头候选区间（在视频开头部分）
     local intro_candidates = mutils.find_sections_in_window(chapters, 0, scan_win,
-        options.min_skip_duration, options.max_skip_duration)
+        opts.min_skip_duration, opts.max_skip_duration)
 
     -- 寻找片尾候选区间（在视频结尾部分）
     local outro_candidates = mutils.find_sections_in_window(chapters, D - scan_win, D,
-        options.min_skip_duration, options.max_skip_duration)
+        opts.min_skip_duration, opts.max_skip_duration)
 
     -- 如果都没找到符合条件的区间
     if #intro_candidates == 0 and #outro_candidates == 0 then
@@ -92,20 +70,20 @@ end
 
 -- 通过手动指定片头片尾
 local function detect_by_manual()
-    local intro = (options.manual_intro_start >= 0 and options.manual_intro_end > options.manual_intro_start) and
-        { options.manual_intro_start, options.manual_intro_end } or nil
-    local outro = (options.manual_outro_start >= 0 and options.manual_outro_end > options.manual_outro_start) and
-        { options.manual_outro_start, options.manual_outro_end } or nil
+    local intro = (opts.manual_intro_start >= 0 and opts.manual_intro_end > opts.manual_intro_start) and
+        { opts.manual_intro_start, opts.manual_intro_end } or nil
+    local outro = (opts.manual_outro_start >= 0 and opts.manual_outro_end > opts.manual_outro_start) and
+        { opts.manual_outro_start, opts.manual_outro_end } or nil
     if not intro and not outro then return nil end
     return { intro = intro, outro = outro }
 end
 
 local function detect_by_mode()
-    if options.detect_mode == DETECT_MODE.CHAPTER then
+    if opts.detect_mode == DETECT_MODE.CHAPTER then
         return detect_by_chapters()
-    elseif options.detect_mode == DETECT_MODE.MANUAL then
+    elseif opts.detect_mode == DETECT_MODE.MANUAL then
         return detect_by_manual()
-    elseif options.detect_mode == DETECT_MODE.AUTO then
+    elseif opts.detect_mode == DETECT_MODE.AUTO then
         local result = detect_by_chapters()
         if result then return result end
         result = detect_by_manual()
@@ -127,14 +105,14 @@ local function load_server_config()
         end
         local data = resp.data
         if data then
-            options.manual_intro_start = 0
-            options.manual_intro_end = data.skipStart or 0
+            opts.manual_intro_start = 0
+            opts.manual_intro_end = data.skipStart
             local total_dur = mutils.dur()
-            options.manual_outro_start = total_dur - data.skipEnd
-            options.manual_outro_end = total_dur
+            opts.manual_outro_start = total_dur - data.skipEnd
+            opts.manual_outro_end = total_dur
             msg.info(string.format("服务器跳过时间点: 片头 %d - %d 秒, 片尾 %d - %d 秒",
-                options.manual_intro_start, options.manual_intro_end,
-                options.manual_outro_start, options.manual_outro_end))
+                opts.manual_intro_start, opts.manual_intro_end,
+                opts.manual_outro_start, opts.manual_outro_end))
         end
     end)
 end
@@ -149,7 +127,11 @@ local function smart_skip()
 
     -- 监听播放位置以执行跳过
     mp.observe_property("time-pos", "number", function(_, curr_pos)
-        if not options.enabled then
+        if not curr_pos then
+            return
+        end
+
+        if not opts.enabled then
             return
         end
 
@@ -160,14 +142,14 @@ local function smart_skip()
         if not has_skip_intro and result and result.intro then
             has_skip_intro = mutils.skip_if_in(curr_pos, result.intro[1], result.intro[2], "⏭️ 正在跳过片头...")
             if has_skip_intro then
-                msg.info("检测到片头: " .. utils.to_string(result.intro))
+                msg.info("检测到片头, mode=".. opts.detect_mode.. " args:" .. utils.to_string(result.intro))
             end
         end
 
         if not has_skip_outro and result and result.outro then
             has_skip_outro = mutils.skip_if_in(curr_pos, result.outro[1], result.outro[2], "⏭️ 正在跳过片尾...")
             if has_skip_outro then
-                msg.info("检测到片尾: " .. utils.to_string(result.outro))
+                msg.info("检测到片尾, mode=".. opts.detect_mode.. " args:" .. utils.to_string(result.outro))
             end
         end
     end)
@@ -176,8 +158,7 @@ end
 -- 初始化函数
 local function init()
     -- 读取配置文件
-    opt.read_options(options, mp.get_script_name())
-
+    opt.read_options(opts, mp.get_script_name())
     -- 注册事件处理器
     mp.register_event("file-loaded", smart_skip)
 end

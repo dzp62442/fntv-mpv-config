@@ -1,4 +1,3 @@
-
 --[[
 MIT License
 
@@ -40,8 +39,8 @@ function api.set_skip_time(play_url, start_time, end_time, callback)
         return false
     end
 
-    if start_time < 0 or end_time < 0 or end_time <= start_time then
-        msg.error("无效的跳过时间点")
+    if start_time < 0 or end_time < 0 then
+        msg.error("无效的跳过时间点,start:".. start_time .. " end:".. end_time)
         return false
     end
 
@@ -59,14 +58,10 @@ function api.set_skip_time(play_url, start_time, end_time, callback)
         skipEnd = end_time
     }
 
-    local headers = {
-        ["Content-Type"] = "application/json"
-    }
-
     http_async.request({
         url = url,
         method = "POST",
-        headers = headers,
+        headers = nil,
         data = data,
         json = true
     }, callback)

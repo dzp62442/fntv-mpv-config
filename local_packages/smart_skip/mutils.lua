@@ -30,6 +30,11 @@ local msg = require('mp.msg')
 
 local mutils = {}
 
+mutils.SCRIPT = mp.get_script_name()
+-- 用 mpv 提供的方式拿配置文件路径
+local conf_dir  = mp.command_native({ "expand-path", "~~/script-opts" })
+local conf_path = conf_dir .. "/" .. mutils.SCRIPT .. ".conf"
+
 function mutils.to_json(tbl)
     -- utils.format_json 成功时返回 1 个值；失败时返回 (nil, "error")
     local s, err = utils.format_json(tbl)
@@ -113,5 +118,31 @@ function mutils.extract_id_and_query(url)
 
     return id, query
 end
+
+-- 持久化配置
+function mutils.save_options()
+    local dir = utils.split_path(conf_path)
+    utils.subprocess({ args = { "mkdir", "-p", dir } })
+
+    local f, err = io.open(conf_path, "w+")
+    if not f then
+        msg.error("无法写入配置: " .. tostring(err))
+        return
+    end
+
+    for k, v in pairs(opts) do
+        local val
+        if type(v) == "boolean" then
+            val = v and "yes" or "no"
+        else
+            val = tostring(v)
+        end
+        f:write(string.format("%s=%s\n", k, val))
+    end
+
+    f:close()
+    msg.info("配置已保存到 " .. conf_path)
+end
+
 
 return mutils
