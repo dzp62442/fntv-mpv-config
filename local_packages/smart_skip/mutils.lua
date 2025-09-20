@@ -41,7 +41,7 @@ function mutils.dur() return mp.get_property_number('duration', 0) or 0 end
 
 function mutils.timepos() return mp.get_property_number('time-pos', 0) or 0 end
 
--- 在OSD上显示消息，同时记录到日志
+-- 在OSD上显示消息
 function mutils.show_message(text, duration)
     duration = duration or 3 -- 默认显示3秒
     -- 设置OSD样式和对齐方式
@@ -49,7 +49,6 @@ function mutils.show_message(text, duration)
     -- {\\an1} 表示左下角对齐，{\\an2} 表示底部居中对齐
     local styled_text = ass .. "{\\an1}" .. text
     mp.osd_message(styled_text, duration)
-    msg.info(text)
 end
 
 -- 获取章节列表
@@ -59,15 +58,19 @@ function mutils.get_chapter_list()
     return chapters
 end
 
--- 跳过一次：如果当前位置在 [a,b) 内，立即 seek 到 b
-function mutils.skip_if_in(a, b, why)
-    local curr_pos = mutils.timepos()
-    if curr_pos >= a and curr_pos < b then
+-- 跳过一次：如果当前位置在 [a,b] 内，立即 seek 到 b
+function mutils.skip_if_in(curr_pos, a, b, why)
+    if curr_pos >= a and curr_pos <= b then
         mutils.show_message(why, 2)
         mp.set_property_number('time-pos', b)
         return true
     end
     return false
+end
+
+-- 判断当前位置是否在区间 [a,b] 内
+function mutils.if_in(curr_pos, a, b)
+    return curr_pos >= a and curr_pos <= b
 end
 
 -- 在指定时间窗口内寻找符合时长条件的连续章节区间
@@ -77,17 +80,17 @@ function mutils.find_sections_in_window(chapters, start_time, end_time, min_dur,
     for i = 1, #chapters do
         local chapter = chapters[i]
         -- 确保章节在指定时间窗口内
-        if chapter.time > end_time then break end
-        
-        local next_chapter = chapters[i + 1]
-        if next_chapter then
-            local duration = next_chapter.time - chapter.time
-            if duration >= min_dur and duration <= max_dur then
-                table.insert(candidates, {
-                    start_time = chapter.time,
-                    end_time = next_chapter.time,
-                    duration = duration
-                })
+        if chapter.time >= start_time and chapter.time <= end_time then
+            local next_chapter = chapters[i + 1]
+            if next_chapter then
+                local duration = next_chapter.time - chapter.time
+                if duration >= min_dur and duration <= max_dur then
+                    table.insert(candidates, {
+                        start_time = chapter.time,
+                        end_time = next_chapter.time,
+                        duration = duration
+                    })
+                end
             end
         end
     end
@@ -95,5 +98,20 @@ function mutils.find_sections_in_window(chapters, start_time, end_time, min_dur,
     return candidates
 end
 
--- 获取anime的
+function mutils.af_add(label, expr) mp.commandv("af", "add", ("@%s:%s"):format(label, expr)) end
+
+function mutils.af_rm(label) mp.commandv("af", "remove", ("@%s"):format(label)) end
+
+function mutils.af_meta(label) return mp.get_property_native(("af-metadata/%s"):format(label)) end
+
+-- 提取 path 中的 id 以及原始 query string
+function mutils.extract_id_and_query(url)
+    -- 提取 id （playvideo/后到 ? 前）
+    local id = url:match("/playvideo/([^%?]+)")
+    -- 提取 query string （? 后的部分）
+    local query = url:match("%?(.*)")
+
+    return id, query
+end
+
 return mutils
