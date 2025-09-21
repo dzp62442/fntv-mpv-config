@@ -1,15 +1,10 @@
 name: Daily MPV Package Build
 
 on:
-  schedule:
-    # 每天早上8点（UTC）运行，即北京时间下午4点
-    - cron: '0 8 * * *'
   # 允许手动触发
   workflow_dispatch:
   # 推送到release分支时也触发
   push:
-    branches: [ release, master ]
-  pull_request:
     branches: [ release, master ]
 
 jobs:
