@@ -33,7 +33,7 @@ local api = require('./api')
 local options = require('./options')
 require("./menu")
 local opts = options.opts
-local DETECT_MODE = options.DETECT_MODE
+local DETECT_MODE = options.DETECT_MODE 
 
 --  通过章节检测片头片尾
 local function detect_by_chapters()

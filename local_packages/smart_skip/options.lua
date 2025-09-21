@@ -25,22 +25,23 @@ GitHub: https://github.com/QiaoKes/fntv-mpv-config
 ]]
 
 
-local mp         = require "mp"
-local utils      = require "mp.utils"
-local msg        = require "mp.msg"
+local mp          = require "mp"
+local utils       = require "mp.utils"
+local msg         = require "mp.msg"
 
 -- 检测模式映射
 local DETECT_MODE = {
     CHAPTER = 1, -- 通过章节检测片头片尾
     MANUAL = 2,  -- 通过手动指定片头片尾
-    AUTO = 3     -- 先通过章节检测，再通过手动指定检测
+    AUTO = 3,    -- 先通过章节检测，再通过手动指定检测，再通过静音检测
+    SILENCE = 4, -- 静音检测模式
 }
 
 -- 配置选项定义
-_G.opts = {
+_G.opts           = {
     -- 基础设置
     enabled = false,
-    detect_mode = DETECT_MODE.AUTO, -- auto, chapter, manual, content
+    detect_mode = DETECT_MODE.AUTO, -- auto, chapter, manual, silence
 
     -- 章节检测参数
     min_skip_duration = 10,  -- 最短片头/片尾长度s
@@ -54,7 +55,11 @@ _G.opts = {
     manual_outro_start = 0,
     manual_outro_end = 0,
 
-    -- 手动触发跳过时长
+    -- 静音检测模式参数
+    silence_audio_db = -40,  -- 静音检测阈值
+    silence_min_duration = 0.7, -- 静音持续最短时间
+
+    -- 手动/静音检测触发跳过时长
     manual_skip_duration = 90,
 }
 
