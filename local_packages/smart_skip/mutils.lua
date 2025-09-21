@@ -24,13 +24,13 @@ SOFTWARE.
 GitHub: https://github.com/QiaoKes/fntv-mpv-config
 ]]
 
-local mp = require('mp')
-local utils = require('mp.utils')
-local msg = require('mp.msg')
+local mp        = require('mp')
+local utils     = require('mp.utils')
+local msg       = require('mp.msg')
 
-local mutils = {}
+local mutils    = {}
 
-mutils.SCRIPT = mp.get_script_name()
+mutils.SCRIPT   = mp.get_script_name()
 -- 用 mpv 提供的方式拿配置文件路径
 local conf_dir  = mp.command_native({ "expand-path", "~~/script-opts" })
 local conf_path = conf_dir .. "/" .. mutils.SCRIPT .. ".conf"
@@ -103,11 +103,14 @@ function mutils.find_sections_in_window(chapters, start_time, end_time, min_dur,
     return candidates
 end
 
-function mutils.af_add(label, expr) mp.commandv("af", "add", ("@%s:%s"):format(label, expr)) end
+function mutils.af_add_noise(label, threshold, duration)
+    mp.commandv("af", "add",
+        ("@%s:lavfi=[silencedetect=noise=%sdB:d=%.3f]"):format(label, threshold, duration))
+end
 
 function mutils.af_rm(label) mp.commandv("af", "remove", ("@%s"):format(label)) end
 
-function mutils.af_meta(label) return mp.get_property_native(("af-metadata/%s"):format(label)) end
+function mutils.af_meta(label) return ("af-metadata/%s"):format(label) end
 
 -- 提取 path 中的 id 以及原始 query string
 function mutils.extract_id_and_query(url)
@@ -144,5 +147,19 @@ function mutils.save_options()
     msg.info("配置已保存到 " .. conf_path)
 end
 
+-- 解析为数字
+function mutils.parse_number(v)
+    if type(v) ~= 'string' then return nil end
+    local trimmed = v:match('^%s*(.-)%s*$')
+    if trimmed == '' then return nil end
+    return tonumber(trimmed)
+end
+
+-- 解析整数
+function mutils.parse_integer(v)
+    local n = mutils.parse_number(v)
+    if not n or n ~= math.floor(n) then return nil end
+    return n
+end
 
 return mutils

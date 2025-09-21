@@ -50,21 +50,6 @@ local function current_outro_len()
     return (opts.manual_outro_end or 0) - (opts.manual_outro_start or 0)
 end
 
--- 解析为数字
-local function parse_number(v)
-    if type(v) ~= 'string' then return nil end
-    local trimmed = v:match('^%s*(.-)%s*$')
-    if trimmed == '' then return nil end
-    return tonumber(trimmed)
-end
-
--- 解析整数
-local function parse_integer(v)
-    local n = parse_number(v)
-    if not n or n ~= math.floor(n) then return nil end
-    return n
-end
-
 -- ========= uosc 菜单渲染 =========
 local function open_uosc_menu(items, title, footnote, menu_type)
     local props = {
@@ -99,7 +84,7 @@ local Controls = {
     enabled = {
         type  = 'toggle',
         title = '总开关',
-        parse = parse_integer,
+        parse = mutils.parse_integer,
         get   = function() return opts.enabled end,
         set   = function(v)
             opts.enabled = not not v
@@ -119,7 +104,7 @@ local Controls = {
             { id = DETECT_MODE.SILENCE, name = '静音检查', hint = '通过识别静音区间自动跳过指定长度' },
             { id = DETECT_MODE.MANUAL, name = '手动模式', hint = '手动指定片头片尾长度' },
         },
-        parse   = parse_integer,
+        parse   = mutils.parse_integer,
         get     = function() return opts.detect_mode end,
         set     = function(id)
             opts.detect_mode = tonumber(id) or opts.detect_mode
@@ -134,7 +119,7 @@ local Controls = {
         type     = 'number',
         title    = '片头时长（秒）',
         hint     = '输入整数（秒）后回车',
-        parse    = parse_integer,
+        parse    = mutils.parse_integer,
         get      = function() return opts.manual_intro_end or 0 end,
         validate = function(n)
             if n < 0 then return false, '必须 ≥ 0' end
@@ -157,7 +142,7 @@ local Controls = {
         type     = 'number',
         title    = '片尾时长（秒）',
         hint     = '输入整数（秒）后回车',
-        parse    = parse_integer,
+        parse    = mutils.parse_integer,
         get      = function() return current_outro_len() end,
         validate = function(n)
             if n < 0 then return false, '必须 ≥ 0' end
@@ -180,7 +165,7 @@ local Controls = {
         type     = 'number',
         title    = '快捷跳过时长（秒）',
         hint     = '输入整数（秒）后回车',
-        parse    = parse_integer,
+        parse    = mutils.parse_integer,
         get      = function() return opts.manual_skip_duration or 0 end,
         validate = function(n)
             if n < 0 then return false, '必须 ≥ 0' end
@@ -200,15 +185,15 @@ local Controls = {
         type = 'number',
         title = '静音检测阈值（dB）',
         hint = '输入整数，单位 dB，数值越小越敏感（通常 ≤ 0）',
-        parse = parse_integer,
+        parse = mutils.parse_integer,
         validate = function(n)
             if n > 0 then return false, '建议 ≤ 0 dB' end
             if n < -60 then return false, '不建议 < -60 dB' end
             return true
         end,
-        get = function() return opts.silence_audio_db or -30 end,
+        get = function() return opts.silence_threshold or -30 end,
         set = function(n)
-            opts.silence_audio_db = n; mutils.save_options()
+            opts.silence_threshold = n; mutils.save_options()
         end,
         after = function(n) msg.info('静音检测阈值(dB) => ' .. n) end,
     },
@@ -219,7 +204,7 @@ local Controls = {
         type = 'number',
         title = '静音持续时间（秒）',
         hint = '支持小数，触发跳过的最短静音持续时间',
-        parse = parse_number,
+        parse = mutils.parse_number,
         validate = function(n)
             if n < 0 then return false, '必须 ≥ 0' end
             if n > 30 then return false, '不建议 > 30 秒' end

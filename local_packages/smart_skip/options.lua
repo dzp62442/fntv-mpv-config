@@ -56,7 +56,7 @@ _G.opts           = {
     manual_outro_end = 0,
 
     -- 静音检测模式参数
-    silence_audio_db = -40,  -- 静音检测阈值
+    silence_threshold = -40,    -- 静音检测阈值
     silence_min_duration = 0.7, -- 静音持续最短时间
 
     -- 手动/静音检测触发跳过时长

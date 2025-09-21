@@ -33,7 +33,9 @@ local api = require('./api')
 local options = require('./options')
 require("./menu")
 local opts = options.opts
-local DETECT_MODE = options.DETECT_MODE 
+local DETECT_MODE = options.DETECT_MODE
+
+local L_SI_LABLE = "ssi_smart_skip"
 
 --  通过章节检测片头片尾
 local function detect_by_chapters()
@@ -58,8 +60,9 @@ local function detect_by_chapters()
     -- 处理片头：如果有多个候选，优先选择第二个（可能第一个是开场剧情）
     local selected_intro = intro_candidates[2] or intro_candidates[1]
 
-    -- 处理片尾：如果有多个候选，优先选择第一个（可能最后一个是结尾剧情）
-    local selected_outro = outro_candidates[1]
+    -- 处理片尾：如果有多个候选，优先选择倒数第二个（可能最后一个是结尾剧情
+    local len = #outro_candidates
+    local selected_outro = outro_candidates[len - 1] or outro_candidates[len]
 
     -- 返回检测到的片头片尾信息
     return {
@@ -78,15 +81,51 @@ local function detect_by_manual()
     return { intro = intro, outro = outro }
 end
 
+
+local silence_skip_info = {}
+local function set_silence_skip_info(name, value)
+    if value == "{}" or value == nil then
+        return
+    end
+
+    local curr_pos = tonumber(string.match(value, "%d+%.?%d+"))
+    if not curr_pos then
+        return
+    end
+    msg.info("find skip pos:" .. curr_pos)
+
+    local skip_time_pos = { curr_pos, curr_pos + opts.manual_skip_duration }
+    if mutils.if_in(curr_pos, 0, opts.max_scan_window) then
+        silence_skip_info.intro = skip_time_pos
+        msg.info("set intro" .. mutils.to_json(skip_time_pos))
+    else
+        silence_skip_info.outro = skip_time_pos
+        msg.info("set outro" .. mutils.to_json(skip_time_pos))
+    end
+end
+
+-- 通过静音区间检查片头片尾
+local function detect_by_silence()
+    if not silence_skip_info.intro  and not silence_skip_info.outro then
+        return nil
+    end
+    return silence_skip_info
+end
+
+
 local function detect_by_mode()
     if opts.detect_mode == DETECT_MODE.CHAPTER then
         return detect_by_chapters()
     elseif opts.detect_mode == DETECT_MODE.MANUAL then
         return detect_by_manual()
+    elseif opts.detect_mode == DETECT_MODE.SILENCE then
+        return detect_by_silence()
     elseif opts.detect_mode == DETECT_MODE.AUTO then
         local result = detect_by_chapters()
         if result then return result end
         result = detect_by_manual()
+        if result then return result end
+        result = detect_by_silence()
         if result then return result end
         return nil
     else
@@ -131,11 +170,14 @@ end
 
 -- 智能跳过片头片尾
 local function smart_skip()
+    mutils.af_add_noise(L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
+
     load_server_config()
 
     local has_skip_intro = false
     local has_skip_outro = false
     local result = nil
+    silence_skip_info = {}
 
     -- 监听播放位置以执行跳过
     mp.observe_property("time-pos", "number", function(_, curr_pos)
@@ -154,14 +196,14 @@ local function smart_skip()
         if not has_skip_intro and result and result.intro then
             has_skip_intro = mutils.skip_if_in(curr_pos, result.intro[1], result.intro[2], "⏭️ 正在跳过片头...")
             if has_skip_intro then
-                msg.info("检测到片头, mode=".. opts.detect_mode.. " args:" .. utils.to_string(result.intro))
+                msg.info("检测到片头, mode=" .. opts.detect_mode .. " args:" .. utils.to_string(result.intro))
             end
         end
 
         if not has_skip_outro and result and result.outro then
             has_skip_outro = mutils.skip_if_in(curr_pos, result.outro[1], result.outro[2], "⏭️ 正在跳过片尾...")
             if has_skip_outro then
-                msg.info("检测到片尾, mode=".. opts.detect_mode.. " args:" .. utils.to_string(result.outro))
+                msg.info("检测到片尾, mode=" .. opts.detect_mode .. " args:" .. utils.to_string(result.outro))
             end
         end
     end)
@@ -174,6 +216,8 @@ mp.register_script_message('manual-skip', manual_skip_forward)
 local function init()
     -- 读取配置文件
     opt.read_options(opts, mp.get_script_name())
+    -- 注册滤镜事件
+    mp.observe_property(mutils.af_meta(L_SI_LABLE), "string", set_silence_skip_info)
     -- 注册事件处理器
     mp.register_event("file-loaded", smart_skip)
 end
