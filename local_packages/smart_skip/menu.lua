@@ -115,7 +115,7 @@ function open_skip_menu_uosc()
         })
     end
 
-    table.insert(items, { title = "— 手动时间（秒） —", keep_open = true, selectable = false })
+    table.insert(items, { title = "— 手动设置片头片尾时间（秒） —", keep_open = true, selectable = false })
 
     -- 片头结束：打开一个 palette 输入菜单（真正的输入框）
     table.insert(items, {
@@ -131,6 +131,16 @@ function open_skip_menu_uosc()
         title = string.format("片尾时长：%s", tostring(opts.manual_outro_end - opts.manual_outro_start)),
         hint = "输入整数（秒）后回车",
         value = { "script-message-to", SCRIPT, "open-outro-input" },
+        keep_open = true,
+        selectable = true,
+    })
+
+    table.insert(items, { title = "— 快捷键快速跳过时长（秒） —", keep_open = true, selectable = false, hint = "默认快捷键: Backspace"})
+
+    table.insert(items, {
+        title = string.format("跳过时长：%s", tostring(opts.manual_skip_duration)),
+        hint = "输入整数（秒）后回车",
+        value = { "script-message-to", SCRIPT, "open-skipdur-input" },
         keep_open = true,
         selectable = true,
     })
@@ -164,10 +174,15 @@ local function open_outro_input_uosc()
     open_number_palette("menu_outro", "设置片尾时长（秒）", "等待输入…", "set-outro-start", val)
 end
 
+local function open_skipdur_input_uosc()
+    local val = tostring(opts.manual_skip_duration)
+    if val == "0" then val = "" end
+    open_number_palette("menu_outro", "快捷键快速跳过时长（秒）", "等待输入…", "set-skipdur-start", val)
+end
 
 mp.commandv("script-message-to", "uosc", "set-button", "skip_cfg_btn", utils.format_json({
     icon = "settings",
-    tooltip = "跳过设置",
+    tooltip = "跳过片头片尾设置",
     command = "script-message open-skip-menu",
 }))
 
@@ -194,6 +209,8 @@ mp.register_script_message("open-intro-input", open_intro_input_uosc)
 
 mp.register_script_message("open-outro-input", open_outro_input_uosc)
 
+mp.register_script_message("open-skipdur-input", open_skipdur_input_uosc)
+
 mp.register_script_message("set-intro-end", function(val)
     local n = tonumber(val)
     if n and n >= 0 and n == math.floor(n) and n <= opts.manual_outro_end then
@@ -217,5 +234,16 @@ mp.register_script_message("set-outro-start", function(val)
         reopen_main()
     else
         open_number_palette("menu_outro", "设置片尾时长（秒）", "无效输入", "set-outro-end", val)
+    end
+end)
+
+mp.register_script_message("set-skipdur-start", function(val)
+    local n = tonumber(val)
+    if n and n >= 0 and n == math.floor(n) and n <= opts.manual_outro_end then
+        opts.manual_skip_duration = n
+        mutils.save_options()
+        reopen_main()
+    else
+        open_number_palette("menu_outro", "设置时长（秒）", "无效输入", "set-skipdur-end", val)
     end
 end)

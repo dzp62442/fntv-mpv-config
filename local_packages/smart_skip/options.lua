@@ -53,6 +53,9 @@ _G.opts = {
     manual_intro_end = 0,
     manual_outro_start = 0,
     manual_outro_end = 0,
+
+    -- 手动触发跳过时长
+    manual_skip_duration = 90,
 }
 
 return {

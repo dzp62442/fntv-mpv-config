@@ -117,6 +117,18 @@ local function load_server_config()
     end)
 end
 
+-- 手动快捷跳过
+local function manual_skip_forward()
+    local duration = tonumber(opts.manual_skip_duration) or 0
+    if duration <= 0 then
+        msg.warn('manual_skip_duration 未设置或小于等于 0，跳过快捷键已忽略')
+        return
+    end
+
+    mp.commandv('seek', tostring(duration), 'relative', 'exact')
+    mutils.show_message(string.format('⏩ 快速跳过 %d 秒', duration), 2)
+end
+
 -- 智能跳过片头片尾
 local function smart_skip()
     load_server_config()
@@ -154,6 +166,9 @@ local function smart_skip()
         end
     end)
 end
+
+mp.add_key_binding(nil, 'manual-skip', manual_skip_forward)
+mp.register_script_message('manual-skip', manual_skip_forward)
 
 -- 初始化函数
 local function init()
