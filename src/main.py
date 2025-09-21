@@ -94,7 +94,8 @@ class MPVConfigManager:
                         possible_paths = [
                             temp_dir / f"{dep_name}_extracted",
                             temp_dir / dep_name,
-                            temp_dir / f"extracted_{dep_name}"
+                            temp_dir / f"extracted_{dep_name}",
+                            Path("local_packages") / dep_name  # 也检查 local_packages 目录
                         ]
                         for path in possible_paths:
                             if path.exists():
