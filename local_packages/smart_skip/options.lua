@@ -37,6 +37,9 @@ local DETECT_MODE = {
     SILENCE = 4, -- 静音检测模式
 }
 
+local L_SI_LABLE  = "ssi_smart_skip"
+local L_BLK_LABEL = "smart_skip_blkd"
+
 -- 配置选项定义
 _G.opts           = {
     -- 基础设置
@@ -56,8 +59,11 @@ _G.opts           = {
     manual_outro_end = 0,
 
     -- 静音检测模式参数
-    silence_threshold = -40,    -- 静音检测阈值
+    silence_threshold = -10,    -- 静音检测阈值
     silence_min_duration = 0.7, -- 静音持续最短时间
+    silence_skip_interval = 2,  -- 静音事件连续触发间隔
+    silence_event_check_timeout = 15, -- 跳过事件确认超时
+    silence_enevt_timeout_default = false, -- 跳过事件确认超时默认行为: 不跳
 
     -- 手动/静音检测触发跳过时长
     manual_skip_duration = 90,
@@ -65,5 +71,7 @@ _G.opts           = {
 
 return {
     opts = _G.opts,
-    DETECT_MODE = DETECT_MODE
+    DETECT_MODE = DETECT_MODE,
+    L_SI_LABLE = L_SI_LABLE,
+    L_BLK_LABEL = L_BLK_LABEL,
 }

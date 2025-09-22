@@ -101,7 +101,7 @@ local Controls = {
         options = {
             { id = DETECT_MODE.AUTO, name = '自动模式', hint = '优先章节，无则使用手动模式，最后使用静音检测' },
             { id = DETECT_MODE.CHAPTER, name = '章节模式', hint = '通过章节自动识别' },
-            { id = DETECT_MODE.SILENCE, name = '静音检查', hint = '通过识别静音区间自动跳过指定长度' },
+            -- { id = DETECT_MODE.SILENCE, name = '静音检查', hint = '通过识别静音区间自动跳过指定长度' },
             { id = DETECT_MODE.MANUAL, name = '手动模式', hint = '手动指定片头片尾长度' },
         },
         parse   = mutils.parse_integer,
@@ -195,7 +195,14 @@ local Controls = {
         set = function(n)
             opts.silence_threshold = n; mutils.save_options()
         end,
-        after = function(n) msg.info('静音检测阈值(dB) => ' .. n) end,
+        after = function(n)
+            msg.info('静音检测阈值(dB) => ' .. n)
+            if not opts.enabled then
+                return
+            end
+            mutils.af_rm(options_mod.L_SI_LABLE)
+            mutils.af_add_noise(options_mod.L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
+        end,
     },
 
 
@@ -214,7 +221,14 @@ local Controls = {
         set = function(n)
             opts.silence_min_duration = n; mutils.save_options()
         end,
-        after = function(n) msg.info('静音持续时间(s) => ' .. n) end,
+        after = function(n)
+            msg.info('静音持续时间(s) => ' .. n)
+            if not opts.enabled then
+                return
+            end
+            mutils.af_rm(options_mod.L_SI_LABLE)
+            mutils.af_add_noise(options_mod.L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
+        end,
     }
 
 }
@@ -255,27 +269,27 @@ local function build_items()
     end
 
     -- 静音检测参数设置
-    table.insert(items, { title = '— 静音检测参数设置 —', keep_open = true, selectable = false })
+    -- table.insert(items, { title = '— 静音检测参数设置 —', keep_open = true, selectable = false })
 
-    table.insert(items, {
-        title = string.format('静音检测阈值：%d', Controls.silence_db.get()),
-        hint = Controls.silence_db.hint,
-        value = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'silence_db' },
-        keep_open = true,
-        selectable = true,
-    })
+    -- table.insert(items, {
+    --     title = string.format('静音检测阈值：%d', Controls.silence_db.get()),
+    --     hint = Controls.silence_db.hint,
+    --     value = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'silence_db' },
+    --     keep_open = true,
+    --     selectable = true,
+    -- })
 
-    table.insert(items, {
-        title = string.format('静音持续时间：%s', tostring(Controls.silence_min_dur.get())),
-        hint = Controls.silence_min_dur.hint,
-        value = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'silence_min_dur' },
-        keep_open = true,
-        selectable = true,
-    })
+    -- table.insert(items, {
+    --     title = string.format('静音持续时间：%s', tostring(Controls.silence_min_dur.get())),
+    --     hint = Controls.silence_min_dur.hint,
+    --     value = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'silence_min_dur' },
+    --     keep_open = true,
+    --     selectable = true,
+    -- })
 
     -- 快捷时长
     table.insert(items,
-        { title = '— 快捷键/静音检查快速跳过时长（秒） —', keep_open = true, selectable = false, hint = '默认快捷键: Backspace' })
+        { title = '— 快捷键快速跳过时长（秒） —', keep_open = true, selectable = false, hint = '默认快捷键: Backspace' })
 
     table.insert(items, {
         title      = string.format('跳过时长：%d', Controls.skipdur.get()),

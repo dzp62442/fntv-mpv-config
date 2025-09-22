@@ -32,10 +32,9 @@ local utils = require('mp.utils')
 local api = require('./api')
 local options = require('./options')
 require("./menu")
-local opts = options.opts
+local ask         = require('ask')
+local opts        = options.opts
 local DETECT_MODE = options.DETECT_MODE
-
-local L_SI_LABLE = "ssi_smart_skip"
 
 --  通过章节检测片头片尾
 local function detect_by_chapters()
@@ -81,37 +80,94 @@ local function detect_by_manual()
     return { intro = intro, outro = outro }
 end
 
-
 local silence_skip_info = {}
-local function set_silence_skip_info(name, value)
-    if value == "{}" or value == nil then
+local black_skip_info = {}
+local function set_skip_info(name, v)
+    -- 判别事件类型（优先看属性名，其次看内容）
+    local is_silence = (name and name == mutils.af_meta(options.L_SI_LABLE))
+    local is_black   = (name and name == mutils.af_meta(options.L_BLK_LABEL))
+
+    -- 不关心的时间
+    if not is_black and not is_silence then
         return
     end
 
-    local curr_pos = tonumber(string.match(value, "%d+%.?%d+"))
+    if not v or v == "{}" then return end
+
+    local curr_pos = tonumber(string.match(v, "%d+%.?%d+"))
     if not curr_pos then
         return
     end
-    msg.info("find skip pos:" .. curr_pos)
 
-    local skip_time_pos = { curr_pos, curr_pos + opts.manual_skip_duration }
-    if mutils.if_in(curr_pos, 0, opts.max_scan_window) then
-        silence_skip_info.intro = skip_time_pos
-        msg.info("set intro" .. mutils.to_json(skip_time_pos))
-    else
-        silence_skip_info.outro = skip_time_pos
-        msg.info("set outro" .. mutils.to_json(skip_time_pos))
+    local total = mutils.dur()
+    local scan_win = math.min(opts.max_scan_window, (opts.max_scan_percent / 100) * total)
+
+    local start_time = curr_pos
+    local end_time = math.min(curr_pos + opts.manual_skip_duration, total)
+
+    -- 确保静音事件在片头片尾区域
+    local skip_time_pos = { start_time, end_time }
+    if mutils.if_in(curr_pos, 0, scan_win) then
+        if is_silence then
+            silence_skip_info.intro = skip_time_pos
+            msg.info("silence_skip_info set intro" .. mutils.to_json(skip_time_pos))
+        else
+            black_skip_info.intro = skip_time_pos
+            msg.info("black_skip_info set intro" .. mutils.to_json(skip_time_pos))
+        end
+    elseif mutils.if_in(curr_pos, total - scan_win, total) then
+        if is_silence then
+            silence_skip_info.outro = skip_time_pos
+            msg.info("silence_skip_info set outro" .. mutils.to_json(skip_time_pos))
+        else
+            black_skip_info.outro = skip_time_pos
+            msg.info("black_skip_info set outro" .. mutils.to_json(skip_time_pos))
+        end
     end
 end
 
 -- 通过静音区间检查片头片尾
 local function detect_by_silence()
-    if not silence_skip_info.intro  and not silence_skip_info.outro then
+    local function validate_section(kind, silence_section, black_section)
+        if not silence_section or not black_section then
+            return nil
+        end
+
+        local start_pos = math.max(silence_section[1], black_section[1])
+        local end_pos = math.min(silence_section[2], black_section[2])
+        if not start_pos or not end_pos or end_pos <= start_pos then
+            msg.verbose(string.format("skip %s rejected: silence/black intervals do not overlap", kind))
+            return nil
+        end
+
+        return { start_pos, end_pos }
+    end
+
+    local intro = validate_section("intro", silence_skip_info.intro, black_skip_info.intro)
+    local outro = validate_section("outro", silence_skip_info.outro, black_skip_info.outro)
+
+    if not intro and not outro then
         return nil
     end
-    return silence_skip_info
-end
 
+    local result = {}
+    if intro then
+        result.intro = intro
+        local intro_json = mutils.to_json(intro)
+        if intro_json then
+            msg.info("silence+black intro " .. intro_json)
+        end
+    end
+    if outro then
+        result.outro = outro
+        local outro_json = mutils.to_json(outro)
+        if outro_json then
+            msg.info("silence+black outro " .. outro_json)
+        end
+    end
+
+    return result
+end
 
 local function detect_by_mode()
     if opts.detect_mode == DETECT_MODE.CHAPTER then
@@ -125,8 +181,8 @@ local function detect_by_mode()
         if result then return result end
         result = detect_by_manual()
         if result then return result end
-        result = detect_by_silence()
-        if result then return result end
+        -- result = detect_by_silence()
+        -- if result then return result end
         return nil
     else
         msg.error("未知的检测模式")
@@ -170,7 +226,8 @@ end
 
 -- 智能跳过片头片尾
 local function smart_skip()
-    mutils.af_add_noise(L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
+    -- mutils.af_add_noise(options.L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
+    -- mutils.vf_add_blackdetect(options.L_BLK_LABEL, 0.10, 0.985, 0.10)
 
     load_server_config()
 
@@ -178,6 +235,7 @@ local function smart_skip()
     local has_skip_outro = false
     local result = nil
     silence_skip_info = {}
+    black_skip_info = {}
 
     -- 监听播放位置以执行跳过
     mp.observe_property("time-pos", "number", function(_, curr_pos)
@@ -217,7 +275,8 @@ local function init()
     -- 读取配置文件
     opt.read_options(opts, mp.get_script_name())
     -- 注册滤镜事件
-    mp.observe_property(mutils.af_meta(L_SI_LABLE), "string", set_silence_skip_info)
+    -- mp.observe_property(mutils.af_meta(options.L_SI_LABLE), "string", set_skip_info)
+    -- mp.observe_property(mutils.af_meta(options.L_BLK_LABEL), "string", set_skip_info)
     -- 注册事件处理器
     mp.register_event("file-loaded", smart_skip)
 end
