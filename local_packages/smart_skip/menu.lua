@@ -99,7 +99,7 @@ local Controls = {
         type    = 'radio',
         title   = '模式选择',
         options = {
-            { id = DETECT_MODE.AUTO, name = '自动模式', hint = '优先章节，无则使用手动模式，最后使用静音检测' },
+            { id = DETECT_MODE.AUTO, name = '自动模式', hint = '优先章节，无则使用手动模式' },
             { id = DETECT_MODE.CHAPTER, name = '章节模式', hint = '通过章节自动识别' },
             -- { id = DETECT_MODE.SILENCE, name = '静音检查', hint = '通过识别静音区间自动跳过指定长度' },
             { id = DETECT_MODE.MANUAL, name = '手动模式', hint = '手动指定片头片尾长度' },
