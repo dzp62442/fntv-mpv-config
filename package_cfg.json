@@ -18,11 +18,7 @@
             "filename_pattern": "mpv-x86_64-{version}",
             "format": "7z",
             "exclude_files": [
-                "doc/*",
-                "installer/*",
-                "*.bat",
-                "*.md",
-                "LICENSE*"
+                "doc/*"
             ]
         },
         "uosc": {
@@ -68,4 +64,5 @@
             "version": "local"
         }
     }
+
 }
