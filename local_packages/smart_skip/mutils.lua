@@ -147,14 +147,24 @@ function mutils.save_options()
         return
     end
 
+    -- 黑名单：这些key不应写入配置文件
+    local blacklist = {
+        ["manual_intro_start"] = true,
+        ["manual_intro_end"] = true,
+        ["manual_outro_start"] = true,
+        ["manual_outro_end"] = true,
+    }
+
     for k, v in pairs(opts) do
-        local val
-        if type(v) == "boolean" then
-            val = v and "yes" or "no"
-        else
-            val = tostring(v)
+        if not blacklist[k] then
+            local val
+            if type(v) == "boolean" then
+                val = v and "yes" or "no"
+            else
+                val = tostring(v)
+            end
+            f:write(string.format("%s=%s\n", k, val))
         end
-        f:write(string.format("%s=%s\n", k, val))
     end
 
     f:close()

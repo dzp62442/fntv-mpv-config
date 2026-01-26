@@ -50,7 +50,7 @@ _G.opts           = {
     min_skip_duration = 10,  -- 最短片头/片尾长度s
     max_skip_duration = 150, -- 最长片头/片尾长度s
     max_scan_window = 600,   -- 最大扫描窗口（10分钟）
-    max_scan_percent = 25,   -- 视频长度百分比
+    max_scan_percent = 15,   -- 视频长度百分比
 
     -- 手动指定片头片尾时间, 从服务器获取，不允许在配置文件设置
     manual_intro_start = 0,

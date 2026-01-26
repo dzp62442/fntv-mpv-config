@@ -179,58 +179,6 @@ local Controls = {
             msg.info('快捷跳过时长 => ' .. n .. ' 秒')
         end,
     },
-
-    -- 静音检测阈值（整数，dB，可为负数）
-    silence_db = {
-        type = 'number',
-        title = '静音检测阈值（dB）',
-        hint = '输入整数，单位 dB，数值越小越敏感（通常 ≤ 0）',
-        parse = mutils.parse_integer,
-        validate = function(n)
-            if n > 0 then return false, '建议 ≤ 0 dB' end
-            if n < -60 then return false, '不建议 < -60 dB' end
-            return true
-        end,
-        get = function() return opts.silence_threshold or -30 end,
-        set = function(n)
-            opts.silence_threshold = n; mutils.save_options()
-        end,
-        after = function(n)
-            msg.info('静音检测阈值(dB) => ' .. n)
-            if not opts.enabled then
-                return
-            end
-            mutils.af_rm(options_mod.L_SI_LABLE)
-            mutils.af_add_noise(options_mod.L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
-        end,
-    },
-
-
-    -- 静音最短持续时间（浮点，秒）
-    silence_min_dur = {
-        type = 'number',
-        title = '静音持续时间（秒）',
-        hint = '支持小数，触发跳过的最短静音持续时间',
-        parse = mutils.parse_number,
-        validate = function(n)
-            if n < 0 then return false, '必须 ≥ 0' end
-            if n > 30 then return false, '不建议 > 30 秒' end
-            return true
-        end,
-        get = function() return opts.silence_min_duration or 0.5 end,
-        set = function(n)
-            opts.silence_min_duration = n; mutils.save_options()
-        end,
-        after = function(n)
-            msg.info('静音持续时间(s) => ' .. n)
-            if not opts.enabled then
-                return
-            end
-            mutils.af_rm(options_mod.L_SI_LABLE)
-            mutils.af_add_noise(options_mod.L_SI_LABLE, opts.silence_threshold, opts.silence_min_duration)
-        end,
-    }
-
 }
 
 -- ========= 菜单构建（由控件表生成） =========
@@ -300,20 +248,28 @@ local function build_items()
     })
 
     -- 手动时间
-    table.insert(items, { title = '— 手动设置片头片尾时间（秒） —', keep_open = true, selectable = false })
+    table.insert(items, { title = '— 手动设置片头片尾时间 —', keep_open = true, selectable = false })
 
     table.insert(items, {
-        title      = string.format('片头时长：%d', Controls.intro.get()),
-        hint       = Controls.intro.hint,
-        value      = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'intro' },
+        title      = string.format('设置片头: %d s', Controls.intro.get()),
+        hint       = '将片头结束时间设置为当前播放位置',
+        value      = { 'script-message-to', SCRIPT, 'menu:action', 'set_skip_time', 'intro' },
         keep_open  = true,
         selectable = true,
     })
 
     table.insert(items, {
-        title      = string.format('片尾时长：%d', Controls.outro.get()),
-        hint       = Controls.outro.hint,
-        value      = { 'script-message-to', SCRIPT, 'menu:action', 'open_input', 'outro' },
+        title      = string.format('设置片尾: %d s', Controls.outro.get()),
+        hint       = '将片尾开始时间设置为当前播放位置',
+        value      = { 'script-message-to', SCRIPT, 'menu:action', 'set_skip_time', 'outro' },
+        keep_open  = true,
+        selectable = true,
+    })
+
+    table.insert(items, {
+        title      = string.format('清空片头片尾设置'),
+        hint       = '',
+        value      = { 'script-message-to', SCRIPT, 'menu:action', 'clean_skip_time', 'all' },
         keep_open  = true,
         selectable = true,
     })
@@ -347,6 +303,36 @@ mp.register_script_message('menu:action', function(op, id, value)
         if c.after then c.after() end
         return open_main_menu()
     end
+
+    if op == 'set_skip_time' and id then
+        local c = Controls[id]; if not c then return end
+        local t = mutils.timepos()
+        local n
+        if id == 'intro' then
+            n = math.floor(t)
+        elseif id == 'outro' then
+            local total = mutils.dur()
+            n = math.floor(total - t)
+        end
+
+        if n and n >= 0 then
+            c.set(n)
+            if c.after then c.after(n) end
+        end
+        return open_main_menu()
+    end
+
+    if op == 'clean_skip_time' then
+        local play_url = mp.get_property('path')
+        api.set_skip_time(play_url, 0, 0)
+        opts.manual_intro_start = 0
+        opts.manual_outro_start = 0
+        opts.manual_intro_end = 0
+        opts.manual_outro_end = 0
+        mutils.save_options()
+        return open_main_menu()
+    end
+
 end)
 
 mp.register_script_message('menu:input', function(id, value)
