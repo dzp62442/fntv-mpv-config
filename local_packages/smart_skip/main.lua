@@ -149,7 +149,6 @@ local function smart_skip()
 
     local has_skip_intro = false
     local has_skip_outro = false
-    local result = nil
 
     -- 监听播放位置以执行跳过
     mp.observe_property("time-pos", "number", function(_, curr_pos)
@@ -161,9 +160,7 @@ local function smart_skip()
             return
         end
 
-        if not result then
-            result = detect_by_mode()
-        end
+        local result = detect_by_mode()
 
         if not has_skip_intro and result and result.intro then
             has_skip_intro = mutils.skip_if_in(curr_pos, result.intro[1], result.intro[2], "⏭️ 正在跳过片头...")

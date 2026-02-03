@@ -14,7 +14,7 @@
             "name": "mpv播放器",
             "enabled": true,
             "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
-            "version": "20251214",
+            "version": "20260203",
             "filename_pattern": "mpv-x86_64-{version}",
             "format": "7z",
             "exclude_files": [
