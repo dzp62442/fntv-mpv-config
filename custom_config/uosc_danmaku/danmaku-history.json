@@ -55,7 +55,7 @@
         "episodeNumber": "1",
         "fname": "彻夜之歌 - S1E1: 夜间飞行"
     },
-    "show_danmaku": true,
+    "show_danmaku": false,
     "胆大党 Season1": {
         "source": "dandanplay",
         "animeTitle": "超自然武装当哒当",
