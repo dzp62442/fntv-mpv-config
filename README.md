@@ -1,3 +1,32 @@
+# 将本配置应用到已安装的飞牛影视
+
+## Windows
+
+把这些“文件夹里的所有内容”复制过去：
+
+```text
+<本项目>\custom_config\mpv\*
+  -> <飞牛影视安装目录>\third_party\fntv-mpv\portable_config\
+
+<本项目>\custom_config\uosc_danmaku\*
+  -> <飞牛影视安装目录>\third_party\fntv-mpv\portable_config\
+```
+
+不是复制 `custom_config` 这个文件夹本身。复制完重启飞牛影视。
+
+## macOS
+
+```bash
+cd /path/to/fntv-mpv-config
+mkdir -p ~/.config/mpv
+cp -R custom_config/mpv/. ~/.config/mpv/
+cp -R custom_config/uosc_danmaku/. ~/.config/mpv/
+```
+
+复制完重启飞牛影视。
+
+---
+
 # MPV配置管理工具
 
 一个用于自动下载、配置和打包MPV播放器及其插件的Python工具。支持版本管理、插件热插拔和GitHub Actions自动化构建。
