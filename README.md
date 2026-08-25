@@ -83,7 +83,7 @@ pip install -r requirements.txt
       "enabled": true
     },
     "uosc_danmaku": {
-      "version": "v1.3.2",
+      "version": "v2.1.0",
       "enabled": false
     }
   }
@@ -338,7 +338,7 @@ python run.py --clean all       # 清理所有临时文件和构建产物
   "uosc_danmaku": {
     "name": "uosc弹幕插件",
     "url": "https://github.com/Tony15246/uosc_danmaku/releases",
-    "version": "v1.3.2",
+    "version": "v2.1.0",
     "exclude_files": [
       "*.md",              // 排除README.md等文档
       "LICENSE*"           // 排除许可证文件
