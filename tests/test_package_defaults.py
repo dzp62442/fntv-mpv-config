@@ -11,6 +11,16 @@ PROJECT_ROOT = Path(__file__).parent.parent
 class TestPackageDefaults(unittest.TestCase):
     """Keep release inputs reproducible and free of user viewing data."""
 
+    def test_mpv_uses_available_official_release(self):
+        config = json.loads((PROJECT_ROOT / "package_cfg.json").read_text(encoding="utf-8"))
+
+        dependency = config["dependencies"]["mpv"]
+        self.assertEqual(dependency["version"], "20260814")
+        self.assertEqual(
+            dependency["url"],
+            "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
+        )
+
     def test_uosc_danmaku_uses_latest_stable_release(self):
         config = json.loads((PROJECT_ROOT / "package_cfg.json").read_text(encoding="utf-8"))
 
