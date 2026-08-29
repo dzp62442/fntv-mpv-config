@@ -1,29 +1,33 @@
 # 将本配置应用到已安装的飞牛影视
 
+请先完全退出飞牛影视，再把本项目的自定义配置复制到 mpv 的用户配置目录。
+飞牛影视 v2.6.2 会从该目录加载配置；安装目录中的 `portable_config` 主要用于首次初始化，
+不适合作为已有安装的手动配置目标。
+
 ## Windows
 
-把这些“文件夹里的所有内容”复制过去：
+在 PowerShell 中进入本项目目录后执行：
 
-```text
-<本项目>\custom_config\mpv\*
-  -> <飞牛影视安装目录>\third_party\fntv-mpv\portable_config\
-
-<本项目>\custom_config\uosc_danmaku\*
-  -> <飞牛影视安装目录>\third_party\fntv-mpv\portable_config\
+```powershell
+$mpvConfigDir = Join-Path $env:APPDATA "mpv"
+New-Item -ItemType Directory -Force -Path $mpvConfigDir | Out-Null
+Copy-Item -Path ".\custom_config\mpv\*" -Destination $mpvConfigDir -Recurse -Force
+Copy-Item -Path ".\custom_config\uosc_danmaku\*" -Destination $mpvConfigDir -Recurse -Force
 ```
 
-不是复制 `custom_config` 这个文件夹本身。复制完重启飞牛影视。
+实际目标目录通常为 `C:\Users\<用户名>\AppData\Roaming\mpv`。
+复制的是两个目录里的内容，不是 `custom_config` 目录本身。复制完成后重新启动飞牛影视。
 
 ## macOS
 
 ```bash
 cd /path/to/fntv-mpv-config
-mkdir -p ~/.config/mpv
-cp -R custom_config/mpv/. ~/.config/mpv/
-cp -R custom_config/uosc_danmaku/. ~/.config/mpv/
+mkdir -p "$HOME/.config/mpv"
+cp -R custom_config/mpv/. "$HOME/.config/mpv/"
+cp -R custom_config/uosc_danmaku/. "$HOME/.config/mpv/"
 ```
 
-复制完重启飞牛影视。
+复制完成后重新启动飞牛影视。应用升级时建议保留或备份该用户配置目录。
 
 ---
 
@@ -104,7 +108,7 @@ pip install -r requirements.txt
 {
   "dependencies": {
     "mpv": {
-      "version": "20250823",
+      "version": "20260814",
       "enabled": true
     },
     "uosc": {
@@ -112,7 +116,7 @@ pip install -r requirements.txt
       "enabled": true
     },
     "uosc_danmaku": {
-      "version": "v1.3.2",
+      "version": "v2.1.0",
       "enabled": false
     }
   }
@@ -251,7 +255,7 @@ python run.py --clean all       # 清理所有临时文件和构建产物
     "mpv": {
       "name": "mpv播放器",
       "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
-      "version": "20250823",
+      "version": "20260814",
       "filename_pattern": "mpv-x86_64-{version}",
       "format": "7z",
       "enabled": true,
@@ -367,7 +371,7 @@ python run.py --clean all       # 清理所有临时文件和构建产物
   "uosc_danmaku": {
     "name": "uosc弹幕插件",
     "url": "https://github.com/Tony15246/uosc_danmaku/releases",
-    "version": "v1.3.2",
+    "version": "v2.1.0",
     "exclude_files": [
       "*.md",              // 排除README.md等文档
       "LICENSE*"           // 排除许可证文件
@@ -413,7 +417,7 @@ python run.py --clean all       # 清理所有临时文件和构建产物
   "mpv": {
     "name": "mpv播放器",
     "url": "https://github.com/shinchiro/mpv-winbuild-cmake/releases",
-    "version": "20250823", 
+    "version": "20260814",
     "exclude_files": [
       "doc/*",             // 排除文档目录
       "installer/*",       // 排除安装程序
