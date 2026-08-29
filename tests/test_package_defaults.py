@@ -31,6 +31,21 @@ class TestPackageDefaults(unittest.TestCase):
             "https://github.com/Tony15246/uosc_danmaku/releases",
         )
 
+    def test_uosc_danmaku_uses_maintainer_api_proxy(self):
+        options_path = (
+            PROJECT_ROOT
+            / "custom_config"
+            / "uosc_danmaku"
+            / "script-opts"
+            / "uosc_danmaku.conf"
+        )
+        options = options_path.read_text(encoding="utf-8").splitlines()
+
+        self.assertIn(
+            "api_server=https://danmaku-api.152468.xyz",
+            options,
+        )
+
     def test_danmaku_history_contains_only_the_visibility_default(self):
         history_path = (
             PROJECT_ROOT
